@@ -16,15 +16,11 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="wel-analyzer API", version="0.1.0")
 
 # CORS設定
-# ローカル開発用に全オリジンを許可（本番環境では適切に制限すること）
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
+# 開発環境用：ポート3000からのアクセスをオリジン問わず許可
+# （本番環境では allow_origins に特定ドメインを指定すること）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origin_regex=r"http://.*:3000",  # 任意のホストのポート3000を許可
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

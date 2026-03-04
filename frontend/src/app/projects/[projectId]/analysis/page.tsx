@@ -13,7 +13,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { CheckCircle2, Circle, ChevronRight, AlertCircle, Save } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
+import { useAppAlert } from '@/hooks/use-app-alert';
 import { useParams } from 'next/navigation';
+import { API_BASE_URL } from '@/lib/api'
 
 export default function AnalysisConfigPage() {
     const params = useParams();
@@ -26,6 +30,7 @@ export default function AnalysisConfigPage() {
     const [suggestions, setSuggestions] = useState<any[]>([]);
 
     // Selections
+    const [configName, setConfigName] = useState<string>("");
     const [mainTableId, setMainTableId] = useState<string>("");
     const [targetColumnId, setTargetColumnId] = useState<string>("");
     const [taskType, setTaskType] = useState<"regression" | "classification">("regression");
@@ -33,12 +38,14 @@ export default function AnalysisConfigPage() {
     // 特徴量設定（簡易的に全部ONにするため、OFFにするものだけリスト化する等の実装もありだが、今回は全部持つ）
     // Array of indices or IDs
     const [selectedFeatureIndices, setSelectedFeatureIndices] = useState<number[]>([]);
+    const [validationError, setValidationError] = useState<string | null>(null);
+    const { alertState, showAlert, closeAlert } = useAppAlert();
 
     useEffect(() => {
         if (!projectId) return;
         const fetchTables = async () => {
             try {
-                const response = await axios.get(`http://localhost:8000/api/projects/${projectId}/tables`);
+                const response = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/tables`);
                 setTables(response.data);
             } catch (error) {
                 console.error("Failed to fetch tables", error);
@@ -53,7 +60,7 @@ export default function AnalysisConfigPage() {
             const fetchSuggestions = async () => {
                 setLoading(true);
                 try {
-                    const response = await axios.get(`http://localhost:8000/api/projects/${projectId}/analysis/suggest_features?main_table_id=${mainTableId}`);
+                    const response = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/analysis/suggest_features?main_table_id=${mainTableId}`);
                     setSuggestions(response.data);
                     // デフォルトですべて選択（インデックスで管理）
                     setSelectedFeatureIndices(response.data.map((_, idx: number) => idx));
@@ -68,8 +75,10 @@ export default function AnalysisConfigPage() {
     }, [step, mainTableId, projectId]);
 
     const handleNext = () => {
-        if (step === 1 && !mainTableId) return alert("テーブルを選択してください");
-        if (step === 2 && !targetColumnId) return alert("目的変数を選択してください");
+        if (step === 1 && !configName.trim()) { setValidationError("設定名を入力してください"); return; }
+        if (step === 1 && !mainTableId) { setValidationError("テーブルを選択してください"); return; }
+        if (step === 2 && !targetColumnId) { setValidationError("目的変数を選択してください"); return; }
+        setValidationError(null);
         setStep(step + 1);
     }
 
@@ -82,7 +91,7 @@ export default function AnalysisConfigPage() {
 
         try {
             const payload = {
-                name: `Analysis Config ${new Date().toLocaleString()}`,
+                name: configName.trim(),
                 main_table_id: parseInt(mainTableId),
                 target_column_id: parseInt(targetColumnId),
                 task_type: taskType,
@@ -92,14 +101,13 @@ export default function AnalysisConfigPage() {
                 }
             };
 
-            const response = await axios.post(`http://localhost:8000/api/projects/${projectId}/analysis/config`, payload);
+            const response = await axios.post(`${API_BASE_URL}/api/projects/${projectId}/analysis/config`, payload);
             localStorage.setItem('lastAnalysisConfigId', response.data.id);
-            alert("分析設定を保存しました。");
-            // 次のフェーズへ遷移（今回はここまで）
+            showAlert("保存完了", "分析設定を保存しました。");
 
         } catch (error) {
             console.error("Save failed", error);
-            alert("保存に失敗しました");
+            showAlert("保存エラー", "保存に失敗しました。");
         }
     }
 
@@ -141,6 +149,9 @@ export default function AnalysisConfigPage() {
                             特徴量設定
                         </div>
                     </div>
+                    {validationError && (
+                        <p className="text-sm text-destructive mt-2">{validationError}</p>
+                    )}
                 </CardHeader>
                 <Separator />
                 <CardContent className="py-8 min-h-[400px]">
@@ -148,6 +159,17 @@ export default function AnalysisConfigPage() {
                     {/* Step 1: Main Table Selection */}
                     {step === 1 && (
                         <div className="space-y-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="config-name" className="text-lg">設定名</Label>
+                                <p className="text-sm text-gray-500">この分析設定の名前を入力してください。後からダッシュボードで識別するために使います。</p>
+                                <Input
+                                    id="config-name"
+                                    value={configName}
+                                    onChange={(e) => setConfigName(e.target.value)}
+                                    placeholder="例: 健診データ 糖尿病リスク分類"
+                                    className="max-w-md"
+                                />
+                            </div>
                             <div className="space-y-2">
                                 <Label className="text-lg">メインテーブルを選択</Label>
                                 <p className="text-sm text-gray-500">分析の主体となるデータ（例: 売上データ、ユーザーマスタなど）を選択してください。</p>
@@ -166,10 +188,10 @@ export default function AnalysisConfigPage() {
                                             </p>
                                             <div className="flex gap-2 mt-1">
                                                 <Badge variant="secondary" className="text-xs font-normal">
-                                                    {table.row_count.toLocaleString()} rows
+                                                    {table.row_count.toLocaleString()} 行
                                                 </Badge>
                                                 <Badge variant="outline" className="text-xs font-normal bg-white">
-                                                    {table.columns.length} columns
+                                                    {table.columns.length} 列
                                                 </Badge>
                                             </div>
                                         </div>
@@ -320,6 +342,15 @@ export default function AnalysisConfigPage() {
                     )}
                 </CardFooter>
             </Card>
+
+            {alertState && (
+                <AppAlertDialog
+                    open={true}
+                    title={alertState.title}
+                    description={alertState.description}
+                    onClose={closeAlert}
+                />
+            )}
         </div>
     );
 }

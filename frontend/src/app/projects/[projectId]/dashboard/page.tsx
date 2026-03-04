@@ -14,6 +14,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 
 import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
+import { useAppAlert } from '@/hooks/use-app-alert';
+import { API_BASE_URL } from '@/lib/api'
 
 export default function DashboardPage() {
     const params = useParams();
@@ -24,9 +27,10 @@ export default function DashboardPage() {
     const [configId, setConfigId] = useState<string>("");
     const [configs, setConfigs] = useState<any[]>([]);
     const pollingRef = useRef<NodeJS.Timeout | null>(null);
+    const { alertState, showAlert, closeAlert } = useAppAlert();
 
     useEffect(() => {
-        axios.get(`http://localhost:8000/api/projects/${projectId}/analysis/configs`)
+        axios.get(`${API_BASE_URL}/api/projects/${projectId}/analysis/configs`)
             .then(res => {
                 setConfigs(res.data);
                 const lastId = localStorage.getItem('lastAnalysisConfigId');
@@ -41,19 +45,19 @@ export default function DashboardPage() {
 
     const startTraining = async () => {
         if (!configId) {
-            alert("分析設定IDを入力してください (デモ用)");
+            showAlert("設定が未選択", "分析設定を選択してください。");
             return;
         }
 
         try {
-            const response = await axios.post(`http://localhost:8000/api/projects/${projectId}/train/run/${configId}`);
+            const response = await axios.post(`${API_BASE_URL}/api/projects/${projectId}/train/run/${configId}`);
             setJob(response.data);
             setResult(null); // Reset result
             startPolling(response.data.id);
         } catch (error: any) {
             console.error("Start training failed", error);
-            const msg = error.response?.data?.detail || error.message || "Unknown error";
-            alert(`学習開始に失敗しました。\nError: ${msg}`);
+            const msg = error.response?.data?.detail || error.message || "不明なエラー";
+            showAlert("学習開始エラー", `学習開始に失敗しました。\nエラー: ${msg}`);
         }
     };
 
@@ -62,7 +66,7 @@ export default function DashboardPage() {
 
         pollingRef.current = setInterval(async () => {
             try {
-                const res = await axios.get(`http://localhost:8000/api/projects/${projectId}/train/status/${jobId}`);
+                const res = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/train/status/${jobId}`);
                 setJob(res.data);
 
                 if (res.data.status === "completed") {
@@ -79,7 +83,7 @@ export default function DashboardPage() {
 
     const fetchResult = async (jobId: number) => {
         try {
-            const res = await axios.get(`http://localhost:8000/api/projects/${projectId}/train/result/${jobId}`);
+            const res = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/train/result/${jobId}`);
             setResult(res.data);
         } catch (err) {
             console.error("Fetch result failed", err);
@@ -92,6 +96,10 @@ export default function DashboardPage() {
             if (pollingRef.current) clearInterval(pollingRef.current);
         };
     }, []);
+
+    // physical table name prefix を除去する（例: upload_p5_20260304161857_01_ → 削除）
+    const stripTablePrefix = (name: string) =>
+        name.replace(/upload_p\d+_\d+_\d+_/g, '')
 
     const getMetricDescription = (key: string) => {
         const k = key.toLowerCase();
@@ -116,7 +124,7 @@ export default function DashboardPage() {
                             {configs.map((c) => (
                                 <SelectItem key={c.id} value={String(c.id)}>
                                     {c.name || `設定 #${c.id}`}
-                                    <span className="ml-1.5 text-xs text-muted-foreground">({c.task_type})</span>
+                                    <span className="ml-1.5 text-xs text-muted-foreground">({c.task_type === 'classification' ? '分類' : c.task_type === 'regression' ? '回帰' : c.task_type})</span>
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -133,10 +141,10 @@ export default function DashboardPage() {
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex justify-between">
-                            ステータス: <span className={`uppercase font-mono ${job.status === 'running' ? 'text-primary' :
+                            ステータス: <span className={`font-semibold ${job.status === 'running' ? 'text-primary' :
                                 job.status === 'completed' ? 'text-primary' :
                                     job.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
-                                }`}>{job.status}</span>
+                                }`}>{job.status === 'running' ? '実行中' : job.status === 'completed' ? '完了' : job.status === 'failed' ? '失敗' : job.status}</span>
                         </CardTitle>
                         <CardDescription>{job.message}</CardDescription>
                     </CardHeader>
@@ -167,7 +175,7 @@ export default function DashboardPage() {
                                 </CardHeader>
                                 <CardContent>
                                     <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
-                                        <ReactMarkdown>{result.ai_analysis_text}</ReactMarkdown>
+                                        <ReactMarkdown>{stripTablePrefix(result.ai_analysis_text)}</ReactMarkdown>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -178,7 +186,7 @@ export default function DashboardPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <TrendingUp className="w-5 h-5" /> 評価指標 (Metrics)
+                                <TrendingUp className="w-5 h-5" /> 評価指標
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -208,20 +216,23 @@ export default function DashboardPage() {
                     <Card className="col-span-1 md:col-span-2 lg:col-span-1">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <BarChart2 className="w-5 h-5" /> 重要特徴量 (Feature Importance)
+                                <BarChart2 className="w-5 h-5" /> 重要特徴量
                             </CardTitle>
                             <CardDescription>モデルの予測に寄与した上位の特徴量</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[300px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
-                                    data={result.feature_importance.slice(0, 10)}
+                                    data={result.feature_importance.slice(0, 10).map((item: any) => ({
+                                        ...item,
+                                        feature: stripTablePrefix(item.feature)
+                                    }))}
                                     layout="vertical"
                                     margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                                     <XAxis type="number" />
-                                    <YAxis type="category" dataKey="feature" width={120} tick={{ fontSize: 11 }} />
+                                    <YAxis type="category" dataKey="feature" width={150} tick={{ fontSize: 11 }} />
                                     <RechartsTooltip
                                         formatter={(value: any) => typeof value === 'number' ? value.toFixed(2) : value}
                                         contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}
@@ -236,6 +247,15 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
                 </div>
+            )}
+
+            {alertState && (
+                <AppAlertDialog
+                    open={true}
+                    title={alertState.title}
+                    description={alertState.description}
+                    onClose={closeAlert}
+                />
             )}
         </div>
     );

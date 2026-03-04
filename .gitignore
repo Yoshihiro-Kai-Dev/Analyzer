@@ -25,4 +25,5 @@ yarn-error.log*
 Thumbs.db
 
 # その他
-# *.pdf
+*.pdf
+*.txt

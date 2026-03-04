@@ -7,18 +7,22 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
 import axios from "axios"
+import { API_BASE_URL } from '@/lib/api'
 
 export function FileUpload({ projectId }: { projectId: string }) {
     const [file, setFile] = useState<File | null>(null)
-    const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed">("idle")
+    const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "type_review" | "completed">("idle")
     const [uploadProgress, setUploadProgress] = useState(0)
     const [processingProgress, setProcessingProgress] = useState(0)
     const [processingMessage, setProcessingMessage] = useState("")
     const [result, setResult] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
+    const [reviewColumns, setReviewColumns] = useState<any[]>([])
+    const [reviewTableId, setReviewTableId] = useState<number | null>(null)
     const pollingInterval = useRef<NodeJS.Timeout | null>(null)
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,26 +39,82 @@ export function FileUpload({ projectId }: { projectId: string }) {
         setUploadProgress(0)
         setProcessingProgress(0)
         setProcessingMessage("")
+        setReviewColumns([])
+        setReviewTableId(null)
         if (pollingInterval.current) {
             clearInterval(pollingInterval.current)
             pollingInterval.current = null
         }
     }
 
+    const updateReviewColumnType = (columnId: number, newType: string) => {
+        setReviewColumns(prev =>
+            prev.map(col => col.id === columnId ? { ...col, inferred_type: newType } : col)
+        )
+    }
+
+    const handleConfirmTypes = async () => {
+        if (!reviewTableId) return
+
+        try {
+            // 変更されたカラムのみPATCH
+            const changedCols = reviewColumns.filter(col => col.inferred_type !== col.originalType)
+            await Promise.all(
+                changedCols.map(col =>
+                    axios.patch(
+                        `${API_BASE_URL}/api/projects/${projectId}/tables/${reviewTableId}/columns/${col.id}`,
+                        { inferred_type: col.inferred_type }
+                    )
+                )
+            )
+            setStatus("completed")
+        } catch (err: any) {
+            const detail = err.response?.data?.detail
+            setError(typeof detail === 'string' ? detail : "型情報の保存に失敗しました")
+        }
+    }
+
     const startPolling = (taskId: string) => {
         const poll = async () => {
             try {
-                // Status endpoint is also scoped under project
-                const response = await axios.get(`http://localhost:8000/api/projects/${projectId}/upload/status/${taskId}`)
+                const response = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/upload/status/${taskId}`)
                 const data = response.data
 
                 setProcessingProgress(data.progress || 0)
                 setProcessingMessage(data.message || "処理中...")
 
                 if (data.status === "completed") {
-                    setStatus("completed")
-                    setResult(data.result)
                     if (pollingInterval.current) clearInterval(pollingInterval.current)
+                    setResult(data.result)
+
+                    // テーブル一覧からアップロードしたテーブルのカラムID付き情報を取得
+                    try {
+                        const tablesRes = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/tables`)
+                        const uploadedTable = tablesRes.data.find(
+                            (t: any) => t.physical_table_name === data.result.physical_table_name
+                        )
+                        if (uploadedTable) {
+                            setReviewTableId(uploadedTable.id)
+                            // result.columns のサンプル値をカラム名でマッピング
+                            const sampleValueMap: Record<string, string[]> = {}
+                            if (data.result.columns) {
+                                data.result.columns.forEach((rc: any) => {
+                                    sampleValueMap[rc.name] = rc.sample_values || []
+                                })
+                            }
+                            setReviewColumns(
+                                uploadedTable.columns.map((col: any) => ({
+                                    ...col,
+                                    originalType: col.inferred_type,
+                                    sample_values: sampleValueMap[col.physical_name] || []
+                                }))
+                            )
+                        }
+                    } catch {
+                        // テーブル取得失敗時はレビューをスキップして完了へ
+                    }
+
+                    setStatus("type_review")
                 } else if (data.status === "failed") {
                     setError(data.message || "処理中にエラーが発生しました")
                     setStatus("idle")
@@ -62,7 +122,6 @@ export function FileUpload({ projectId }: { projectId: string }) {
                 }
             } catch (err) {
                 console.error("Polling error", err)
-                // ポーリングエラーは致命的でない限り無視するか、リトライ上限を設ける
             }
         }
 
@@ -81,7 +140,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
         formData.append("file", file)
 
         try {
-            const response = await axios.post(`http://localhost:8000/api/projects/${projectId}/upload/csv`, formData, {
+            const response = await axios.post(`${API_BASE_URL}/api/projects/${projectId}/upload/csv`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 },
@@ -106,7 +165,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
             } else if (err instanceof Error) {
                 setError(err.message)
             } else {
-                setError("Unknown error occurred")
+                setError("不明なエラーが発生しました")
             }
         }
     }
@@ -120,6 +179,20 @@ export function FileUpload({ projectId }: { projectId: string }) {
         }
     }, [])
 
+    const typeLabel = (t: string) =>
+        t === 'numeric' ? '数値' :
+        t === 'categorical' ? 'カテゴリ' :
+        t === 'datetime' ? '日時' :
+        t === 'text' ? '文字列' :
+        t === 'id' ? 'ユニークID' : t
+
+    const typeBadgeClass = (t: string) =>
+        t === 'numeric' ? 'bg-primary/10 text-primary' :
+        t === 'categorical' ? 'bg-secondary text-secondary-foreground' :
+        t === 'text' ? 'bg-green-100 text-green-700' :
+        t === 'id' ? 'bg-purple-100 text-purple-700' :
+        'bg-muted text-muted-foreground'
+
     return (
         <Card className="w-full max-w-4xl mx-auto mt-10">
             <CardHeader>
@@ -128,7 +201,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
             </CardHeader>
             <CardContent className="space-y-6">
                 <div className="grid w-full max-w-sm items-center gap-1.5">
-                    <Label htmlFor="csv-file">CSV File</Label>
+                    <Label htmlFor="csv-file">CSVファイル</Label>
                     <Input id="csv-file" type="file" accept=".csv" onChange={handleFileChange} disabled={status !== "idle" && status !== "completed"} />
                 </div>
 
@@ -155,7 +228,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
                         <div className="flex items-center gap-3">
                             {status === "processing" ? (
                                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                            ) : status === "completed" ? (
+                            ) : status === "type_review" || status === "completed" ? (
                                 <CheckCircle2 className="h-5 w-5 text-primary" />
                             ) : (
                                 <Circle className="h-5 w-5 text-muted-foreground/30" />
@@ -171,6 +244,22 @@ export function FileUpload({ projectId }: { projectId: string }) {
                                 )}
                             </div>
                         </div>
+
+                        {/* Step 3: Type Review */}
+                        <div className="flex items-center gap-3">
+                            {status === "type_review" ? (
+                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            ) : status === "completed" ? (
+                                <CheckCircle2 className="h-5 w-5 text-primary" />
+                            ) : (
+                                <Circle className="h-5 w-5 text-muted-foreground/30" />
+                            )}
+                            <div className="flex-1 space-y-1">
+                                <div className="flex justify-between text-sm font-medium">
+                                    <span>カラム型の確認・修正</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -181,7 +270,75 @@ export function FileUpload({ projectId }: { projectId: string }) {
                     </Alert>
                 )}
 
-                {result && (
+                {/* Type Review Step */}
+                {status === "type_review" && result && reviewColumns.length > 0 && (
+                    <div className="space-y-4 pt-4 border-t">
+                        <div>
+                            <h3 className="font-semibold text-sm text-gray-700 mb-1">カラム型の確認・修正</h3>
+                            <p className="text-xs text-gray-500">自動推論された型を確認し、誤りがあれば修正してから「確定する」を押してください。</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="border rounded-md p-4 bg-white">
+                                <h3 className="font-semibold mb-2 text-sm text-gray-500 uppercase">ファイル情報</h3>
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-sm"><span className="text-gray-600">ファイル名:</span> <span className="font-medium">{result.filename}</span></div>
+                                    <div className="flex justify-between text-sm"><span className="text-gray-600">保存テーブル:</span> <span className="font-medium">{result.physical_table_name}</span></div>
+                                    <div className="flex justify-between text-sm"><span className="text-gray-600">行数:</span> <span className="font-medium">{result.rows.toLocaleString()} 行</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="border rounded-md p-0 overflow-hidden">
+                            <div className="bg-gray-100 px-4 py-2 border-b">
+                                <h3 className="font-semibold text-sm text-gray-700">カラム定義（推論結果・修正可能）</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>カラム名</TableHead>
+                                            <TableHead>Pandas型</TableHead>
+                                            <TableHead>推論型</TableHead>
+                                            <TableHead>サンプル値（上位3件）</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {reviewColumns.map((col: any) => (
+                                            <TableRow key={col.id}>
+                                                <TableCell className="font-medium">{col.physical_name}</TableCell>
+                                                <TableCell>{col.data_type}</TableCell>
+                                                <TableCell>
+                                                    <Select
+                                                        value={col.inferred_type}
+                                                        onValueChange={(val) => updateReviewColumnType(col.id, val)}
+                                                    >
+                                                        <SelectTrigger className="w-32 h-7 text-xs">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="numeric">数値</SelectItem>
+                                                            <SelectItem value="categorical">カテゴリ</SelectItem>
+                                                            <SelectItem value="datetime">日時</SelectItem>
+                                                            <SelectItem value="text">文字列</SelectItem>
+                                                            <SelectItem value="id">ユニークID</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                                <TableCell className="text-gray-500 text-sm">
+                                                    {col.sample_values?.join(", ")}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Completed Step */}
+                {status === "completed" && result && (
                     <div className="space-y-4 pt-4 border-t">
                         <Alert className="bg-primary/10 border-primary/20">
                             <CheckCircle2 className="h-4 w-4 text-primary" />
@@ -211,23 +368,20 @@ export function FileUpload({ projectId }: { projectId: string }) {
                                             <TableHead>カラム名</TableHead>
                                             <TableHead>Pandas型</TableHead>
                                             <TableHead>推論型</TableHead>
-                                            <TableHead>サンプル値 (Top 3)</TableHead>
+                                            <TableHead>サンプル値（上位3件）</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {result.columns.map((col: any) => (
-                                            <TableRow key={col.name}>
-                                                <TableCell className="font-medium">{col.name}</TableCell>
-                                                <TableCell>{col.pandas_dtype}</TableCell>
+                                        {reviewColumns.map((col: any) => (
+                                            <TableRow key={col.id}>
+                                                <TableCell className="font-medium">{col.physical_name}</TableCell>
+                                                <TableCell>{col.data_type}</TableCell>
                                                 <TableCell>
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${col.inferred_type === 'numeric' ? 'bg-primary/10 text-primary' :
-                                                        col.inferred_type === 'categorical' ? 'bg-secondary text-secondary-foreground' :
-                                                            'bg-muted text-muted-foreground'
-                                                        }`}>
-                                                        {col.inferred_type}
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeBadgeClass(col.inferred_type)}`}>
+                                                        {typeLabel(col.inferred_type)}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="text-gray-500 text-sm">{col.sample_values.join(", ")}</TableCell>
+                                                <TableCell className="text-gray-500 text-sm">{col.sample_values?.join(", ")}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -238,10 +392,16 @@ export function FileUpload({ projectId }: { projectId: string }) {
                 )}
             </CardContent>
             <CardFooter>
-                <Button onClick={handleUpload} disabled={!file || status === "uploading" || status === "processing"}>
-                    {status === "uploading" ? "アップロード中..." :
-                        status === "processing" ? "処理中..." : "アップロード実行"}
-                </Button>
+                {status === "type_review" ? (
+                    <Button onClick={handleConfirmTypes}>
+                        確定する
+                    </Button>
+                ) : (
+                    <Button onClick={handleUpload} disabled={!file || status === "uploading" || status === "processing"}>
+                        {status === "uploading" ? "アップロード中..." :
+                            status === "processing" ? "処理中..." : "アップロード実行"}
+                    </Button>
+                )}
             </CardFooter>
         </Card>
     )

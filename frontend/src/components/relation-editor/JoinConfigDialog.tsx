@@ -11,6 +11,8 @@ interface JoinConfigDialogProps {
     onSave: (config: JoinConfig) => void;
     sourceNode: any;
     targetNode: any;
+    initialParentColumn?: string;
+    initialChildColumn?: string;
 }
 
 export interface JoinConfig {
@@ -19,25 +21,28 @@ export interface JoinConfig {
     cardinality: "OneToOne" | "OneToMany";
 }
 
-export function JoinConfigDialog({ isOpen, onClose, onSave, sourceNode, targetNode }: JoinConfigDialogProps) {
+export function JoinConfigDialog({ isOpen, onClose, onSave, sourceNode, targetNode, initialParentColumn, initialChildColumn }: JoinConfigDialogProps) {
     const [parentColumn, setParentColumn] = useState<string>("");
     const [childColumn, setChildColumn] = useState<string>("");
     const [cardinality, setCardinality] = useState<"OneToOne" | "OneToMany">("OneToMany");
+    const [validationError, setValidationError] = useState<string | null>(null);
 
-    // リセット処理
+    // ダイアログを開くたびに初期値をセット
     useEffect(() => {
         if (isOpen) {
-            setParentColumn("");
-            setChildColumn("");
+            setParentColumn(initialParentColumn ?? "");
+            setChildColumn(initialChildColumn ?? "");
             setCardinality("OneToMany");
+            setValidationError(null);
         }
-    }, [isOpen]);
+    }, [isOpen, initialParentColumn, initialChildColumn]);
 
     const handleSave = () => {
         if (!parentColumn || !childColumn) {
-            alert("結合キーを選択してください");
+            setValidationError("結合キーを両方選択してください");
             return;
         }
+        setValidationError(null);
         onSave({
             parentColumn,
             childColumn,
@@ -107,14 +112,14 @@ export function JoinConfigDialog({ isOpen, onClose, onSave, sourceNode, targetNo
                             <div className="flex items-center space-x-2 border p-3 rounded-md flex-1 hover:bg-slate-50 cursor-pointer min-w-[250px]">
                                 <RadioGroupItem value="OneToMany" id="r1" />
                                 <Label htmlFor="r1" className="cursor-pointer">
-                                    1 : N (One To Many)
+                                    1 : N（1対多）
                                     <span className="block text-xs text-gray-500 font-normal mt-1">通常はこちらを選択</span>
                                 </Label>
                             </div>
                             <div className="flex items-center space-x-2 border p-3 rounded-md flex-1 hover:bg-slate-50 cursor-pointer min-w-[250px]">
                                 <RadioGroupItem value="OneToOne" id="r2" />
                                 <Label htmlFor="r2" className="cursor-pointer">
-                                    1 : 1 (One To One)
+                                    1 : 1（1対1）
                                     <span className="block text-xs text-gray-500 font-normal mt-1">正副テーブルの関係など</span>
                                 </Label>
                             </div>
@@ -122,6 +127,9 @@ export function JoinConfigDialog({ isOpen, onClose, onSave, sourceNode, targetNo
                     </div>
                 </div>
 
+                {validationError && (
+                    <p className="text-sm text-destructive">{validationError}</p>
+                )}
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>キャンセル</Button>
                     <Button onClick={handleSave}>設定を保存</Button>

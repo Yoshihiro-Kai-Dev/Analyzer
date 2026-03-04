@@ -17,7 +17,7 @@ export function TopBar({ projectId }: { projectId: string }) {
 
     return (
         <header className="h-12 border-b border-border bg-white flex items-center px-6 gap-1.5 text-sm text-muted-foreground shrink-0">
-            <span className="font-medium text-foreground">Wel Analyzer</span>
+            <span className="font-medium text-foreground">分析くん</span>
             <ChevronRight className="w-3.5 h-3.5" />
             <span>Project #{projectId}</span>
             {sectionName && (

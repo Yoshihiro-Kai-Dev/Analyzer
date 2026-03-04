@@ -27,6 +27,9 @@ class ColumnBase(BaseModel):
 class ColumnCreate(ColumnBase):
     pass
 
+class ColumnUpdate(BaseModel):
+    inferred_type: str
+
 class Column(ColumnBase):
     id: int
     table_id: int
