@@ -22,7 +22,7 @@ export default async function ProjectLayout({
                     <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
                         <Cpu className="w-4 h-4 text-white" />
                     </div>
-                    <span className="font-semibold text-sm text-foreground">Wel Analyzer</span>
+                    <span className="font-semibold text-sm text-foreground">分析くん</span>
                 </div>
 
                 {/* Project badge */}
@@ -45,7 +45,7 @@ export default async function ProjectLayout({
 
                 {/* Footer */}
                 <div className="px-4 py-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground text-center">&copy; 2026 Wel Analyzer</p>
+                    <p className="text-xs text-muted-foreground text-center">&copy; 2026 分析くん</p>
                 </div>
             </aside>
 

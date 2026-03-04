@@ -8,6 +8,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { API_BASE_URL } from '@/lib/api';
 
 interface Project {
     id: number;
@@ -23,6 +32,8 @@ export default function PortalPage() {
     const [newProjectName, setNewProjectName] = useState('');
     const [newProjectDesc, setNewProjectDesc] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     useEffect(() => {
         fetchProjects();
@@ -30,7 +41,7 @@ export default function PortalPage() {
 
     const fetchProjects = async () => {
         try {
-            const res = await fetch('http://localhost:8000/api/projects/');
+            const res = await fetch(`${API_BASE_URL}/api/projects/`);
             if (res.ok) {
                 const data = await res.json();
                 setProjects(data);
@@ -47,7 +58,7 @@ export default function PortalPage() {
         if (!newProjectName) return;
 
         try {
-            const res = await fetch('http://localhost:8000/api/projects/', {
+            const res = await fetch(`${API_BASE_URL}/api/projects/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: newProjectName, description: newProjectDesc }),
@@ -62,29 +73,34 @@ export default function PortalPage() {
         }
     };
 
-    const handleDeleteProject = async (e: React.MouseEvent, projectId: number) => {
-        e.preventDefault(); // Link遷移を防止
+    const handleDeleteClick = (e: React.MouseEvent, projectId: number) => {
+        e.preventDefault();
         e.stopPropagation();
+        setDeleteError(null);
+        setDeleteTargetId(projectId);
+    };
 
-        if (!confirm('このプロジェクトを削除しますか？\n関連するデータはすべて削除されます。')) {
-            return;
-        }
+    const handleDeleteConfirm = async () => {
+        if (deleteTargetId === null) return;
 
         try {
-            const res = await fetch(`http://localhost:8000/api/projects/${projectId}`, {
+            const res = await fetch(`${API_BASE_URL}/api/projects/${deleteTargetId}`, {
                 method: 'DELETE',
             });
 
             if (res.ok) {
-                setProjects(projects.filter(p => p.id !== projectId));
+                setProjects(projects.filter(p => p.id !== deleteTargetId));
+                setDeleteTargetId(null);
             } else {
-                alert('削除に失敗しました。');
+                setDeleteError('削除に失敗しました。');
             }
         } catch (error) {
             console.error('Failed to delete project', error);
-            alert('削除中にエラーが発生しました。');
+            setDeleteError('削除中にエラーが発生しました。');
         }
     };
+
+    const deleteTarget = projects.find(p => p.id === deleteTargetId);
 
     return (
         <div className="min-h-screen bg-background">
@@ -94,7 +110,7 @@ export default function PortalPage() {
                     <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
                         <Cpu className="w-4 h-4 text-white" />
                     </div>
-                    <h1 className="text-base font-semibold text-foreground">Wel Analyzer</h1>
+                    <h1 className="text-base font-semibold text-foreground">分析くん</h1>
                 </div>
             </header>
 
@@ -186,7 +202,7 @@ export default function PortalPage() {
                                         </CardFooter>
                                         {/* Delete Button */}
                                         <button
-                                            onClick={(e) => handleDeleteProject(e, project.id)}
+                                            onClick={(e) => handleDeleteClick(e, project.id)}
                                             className="absolute top-3.5 right-3.5 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                                             title="プロジェクトを削除"
                                         >
@@ -199,6 +215,30 @@ export default function PortalPage() {
                     )}
                 </div>
             </main>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteTargetId !== null} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>プロジェクトの削除</DialogTitle>
+                        <DialogDescription>
+                            「{deleteTarget?.name}」を削除しますか？<br />
+                            関連するデータはすべて削除されます。この操作は取り消せません。
+                        </DialogDescription>
+                    </DialogHeader>
+                    {deleteError && (
+                        <p className="text-sm text-destructive">{deleteError}</p>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteTargetId(null)}>
+                            キャンセル
+                        </Button>
+                        <Button variant="destructive" onClick={handleDeleteConfirm}>
+                            削除する
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

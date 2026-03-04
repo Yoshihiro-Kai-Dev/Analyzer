@@ -19,6 +19,8 @@ import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { TableNode } from '@/components/relation-editor/TableNode';
 import { JoinConfigDialog, JoinConfig } from '@/components/relation-editor/JoinConfigDialog';
+import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
+import { useAppAlert } from '@/hooks/use-app-alert';
 import dagre from 'dagre';
 
 const nodeTypes = {
@@ -60,6 +62,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 
 
 import { useParams } from 'next/navigation';
+import { API_BASE_URL } from '@/lib/api'
 
 export default function RelationsPage() {
     const params = useParams();
@@ -67,6 +70,7 @@ export default function RelationsPage() {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [loading, setLoading] = useState(true);
+    const { alertState, showAlert, closeAlert } = useAppAlert();
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -76,8 +80,8 @@ export default function RelationsPage() {
         setLoading(true);
         try {
             const [tablesRes, relationsRes] = await Promise.all([
-                axios.get(`http://localhost:8000/api/projects/${projectId}/tables`),
-                axios.get(`http://localhost:8000/api/projects/${projectId}/relations`)
+                axios.get(`${API_BASE_URL}/api/projects/${projectId}/tables`),
+                axios.get(`${API_BASE_URL}/api/projects/${projectId}/relations`)
             ]);
 
             const tables = tablesRes.data;
@@ -89,7 +93,8 @@ export default function RelationsPage() {
                 type: 'table',
                 position: { x: 0, y: 0 }, // レイアウト計算前にリセット
                 data: {
-                    label: table.physical_table_name,
+                    label: table.original_filename.replace(/\.csv$/i, ''),
+                    physical_table_name: table.physical_table_name,
                     row_count: table.row_count,
                     columns: table.columns
                 },
@@ -100,6 +105,8 @@ export default function RelationsPage() {
                 id: `e${rel.parent_table_id}-${rel.child_table_id}`,
                 source: rel.parent_table_id.toString(),
                 target: rel.child_table_id.toString(),
+                sourceHandle: `source-${rel.join_keys.parent_col}`,
+                targetHandle: `target-${rel.join_keys.child_col}`,
                 label: rel.cardinality === 'OneToMany' ? '1:N' : '1:1',
                 type: 'smoothstep',
                 animated: false,
@@ -127,7 +134,7 @@ export default function RelationsPage() {
 
         } catch (error) {
             console.error("Failed to fetch data:", error);
-            alert("データの読み込みに失敗しました。サーバーの状態を確認してください。");
+            showAlert("読み込みエラー", "データの読み込みに失敗しました。サーバーの状態を確認してください。");
         } finally {
             setLoading(false);
         }
@@ -142,7 +149,7 @@ export default function RelationsPage() {
     const onConnect: OnConnect = useCallback((params: Connection) => {
         // 自己結合禁止
         if (params.source === params.target) {
-            alert("テーブル自身への結合は定義できません（自己結合は現在サポートされていません）。");
+            showAlert("結合エラー", "テーブル自身への結合は定義できません（自己結合は現在サポートされていません）。");
             return;
         }
 
@@ -169,7 +176,7 @@ export default function RelationsPage() {
                 cardinality: config.cardinality
             };
 
-            await axios.post(`http://localhost:8000/api/projects/${projectId}/relations`, payload);
+            await axios.post(`${API_BASE_URL}/api/projects/${projectId}/relations`, payload);
 
             // エッジを追加
             const newEdge: Edge = {
@@ -191,19 +198,21 @@ export default function RelationsPage() {
         } catch (error: any) {
             console.error("Failed to save relation:", error);
             const msg = error.response?.data?.detail || "リレーションの保存に失敗しました";
-            alert(`エラーが発生しました: ${msg}`);
+            showAlert("保存エラー", msg);
             // Dialogは閉じないでおく（修正できるように）
         }
     };
 
     const getPendingNodes = () => {
-        if (!pendingConnection) return { source: null, target: null };
+        if (!pendingConnection) return { source: null, target: null, sourceColumn: "", targetColumn: "" };
         const source = nodes.find(n => n.id === pendingConnection.source);
         const target = nodes.find(n => n.id === pendingConnection.target);
-        return { source, target };
+        const sourceColumn = pendingConnection.sourceHandle?.replace(/^source-/, "") ?? "";
+        const targetColumn = pendingConnection.targetHandle?.replace(/^target-/, "") ?? "";
+        return { source, target, sourceColumn, targetColumn };
     };
 
-    const { source, target } = getPendingNodes();
+    const { source, target, sourceColumn, targetColumn } = getPendingNodes();
 
     return (
         <div className="w-full h-screen flex flex-col">
@@ -251,7 +260,18 @@ export default function RelationsPage() {
                 onSave={handleSaveRelation}
                 sourceNode={source}
                 targetNode={target}
+                initialParentColumn={sourceColumn}
+                initialChildColumn={targetColumn}
             />
+
+            {alertState && (
+                <AppAlertDialog
+                    open={true}
+                    title={alertState.title}
+                    description={alertState.description}
+                    onClose={closeAlert}
+                />
+            )}
         </div>
     );
 }
