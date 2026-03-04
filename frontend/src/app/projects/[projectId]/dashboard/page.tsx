@@ -8,10 +8,12 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Play, Loader2, CheckCircle2, TrendingUp, BarChart2, Sparkles, HelpCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 
 
 import { useParams } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
 
 export default function DashboardPage() {
     const params = useParams();
@@ -20,14 +22,22 @@ export default function DashboardPage() {
     const [job, setJob] = useState<any>(null);
     const [result, setResult] = useState<any>(null);
     const [configId, setConfigId] = useState<string>("");
+    const [configs, setConfigs] = useState<any[]>([]);
     const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        const lastId = localStorage.getItem('lastAnalysisConfigId');
-        if (lastId) {
-            setConfigId(lastId);
-        }
-    }, []);
+        axios.get(`http://localhost:8000/api/projects/${projectId}/analysis/configs`)
+            .then(res => {
+                setConfigs(res.data);
+                const lastId = localStorage.getItem('lastAnalysisConfigId');
+                if (lastId && res.data.some((c: any) => String(c.id) === lastId)) {
+                    setConfigId(lastId);
+                } else if (res.data.length > 0) {
+                    setConfigId(String(res.data[0].id));
+                }
+            })
+            .catch(() => {});
+    }, [projectId]);
 
     const startTraining = async () => {
         if (!configId) {
@@ -97,14 +107,20 @@ export default function DashboardPage() {
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-foreground">分析ダッシュボード</h1>
                 <div className="flex gap-2">
-                    {/* Config ID Input (Temporary) */}
-                    <input
-                        type="number"
-                        placeholder="Config ID"
-                        className="border rounded px-2 py-1 text-sm bg-white"
-                        value={configId}
-                        onChange={(e) => setConfigId(e.target.value)}
-                    />
+                    {/* 分析設定選択 */}
+                    <Select value={configId} onValueChange={setConfigId} disabled={configs.length === 0}>
+                        <SelectTrigger className="w-56 bg-white">
+                            <SelectValue placeholder={configs.length === 0 ? "分析設定がありません" : "設定を選択"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {configs.map((c) => (
+                                <SelectItem key={c.id} value={String(c.id)}>
+                                    {c.name || `設定 #${c.id}`}
+                                    <span className="ml-1.5 text-xs text-muted-foreground">({c.task_type})</span>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Button onClick={startTraining} disabled={!configId || (job && job.status === "running")} className="bg-primary hover:opacity-90 text-primary-foreground">
                         {job && job.status === "running" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
                         学習実行
@@ -150,8 +166,8 @@ export default function DashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap leading-relaxed">
-                                        {result.ai_analysis_text}
+                                    <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                                        <ReactMarkdown>{result.ai_analysis_text}</ReactMarkdown>
                                     </div>
                                 </CardContent>
                             </Card>
