@@ -3,15 +3,18 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Trash2, Plus, Cpu, FolderOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface Project {
-    id: int;
+    id: number;
     name: string;
     description: string;
     created_at: string;
 }
-
-import { Trash2 } from 'lucide-react';
 
 export default function PortalPage() {
     const router = useRouter();
@@ -84,110 +87,112 @@ export default function PortalPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50">
-            <header className="bg-white shadow-sm">
-                <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-                    <h1 className="text-2xl font-bold text-slate-800">Wel Analyzer ポータル</h1>
+        <div className="min-h-screen bg-background">
+            {/* Header */}
+            <header className="bg-white border-b border-border">
+                <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
+                        <Cpu className="w-4 h-4 text-white" />
+                    </div>
+                    <h1 className="text-base font-semibold text-foreground">Wel Analyzer</h1>
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-                {/* Welcome Section */}
-                <div className="mb-12 text-center">
-                    <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">
-                        データ分析プロジェクトへようこそ
-                    </h2>
-                    <p className="mt-4 text-lg text-slate-600">
+            <main className="max-w-7xl mx-auto px-6 py-10">
+                {/* Hero */}
+                <div className="mb-10">
+                    <h2 className="text-2xl font-bold text-foreground">データ分析プロジェクト</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
                         CSVデータをアップロードするだけで、AIが自動で分析・インサイトを提供します。
                     </p>
                 </div>
 
                 {/* Project List */}
-                <div className="space-y-6">
+                <div className="space-y-5">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-semibold text-slate-800">プロジェクト一覧</h3>
-                        <button
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">プロジェクト一覧</h3>
+                        <Button
                             onClick={() => setIsCreating(!isCreating)}
-                            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 transition"
+                            variant={isCreating ? "outline" : "default"}
+                            size="sm"
                         >
-                            {isCreating ? 'キャンセル' : '新規プロジェクト作成'}
-                        </button>
+                            {isCreating ? 'キャンセル' : <><Plus className="w-4 h-4 mr-1.5" />新規作成</>}
+                        </Button>
                     </div>
 
                     {isCreating && (
-                        <div className="bg-white p-6 rounded-lg shadow-md border border-slate-200 animate-fadeIn">
-                            <h4 className="text-lg font-medium mb-4">新しいプロジェクトを作成</h4>
-                            <form onSubmit={handleCreateProject} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700">プロジェクト名</label>
-                                    <input
-                                        type="text"
-                                        value={newProjectName}
-                                        onChange={(e) => setNewProjectName(e.target.value)}
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border"
-                                        placeholder="例: 2024年売上分析"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700">概要（任意）</label>
-                                    <input
-                                        type="text"
-                                        value={newProjectDesc}
-                                        onChange={(e) => setNewProjectDesc(e.target.value)}
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border"
-                                        placeholder="分析の目的など"
-                                    />
-                                </div>
-                                <div className="flex justify-end">
-                                    <button
-                                        type="submit"
-                                        className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 font-medium"
-                                    >
-                                        作成して開始
-                                    </button>
-                                </div>
+                        <Card className="shadow-sm">
+                            <CardHeader className="pb-4">
+                                <CardTitle className="text-base">新しいプロジェクトを作成</CardTitle>
+                            </CardHeader>
+                            <form onSubmit={handleCreateProject}>
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="project-name">プロジェクト名</Label>
+                                        <Input
+                                            id="project-name"
+                                            value={newProjectName}
+                                            onChange={(e) => setNewProjectName(e.target.value)}
+                                            placeholder="例: 2024年売上分析"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="project-desc">概要（任意）</Label>
+                                        <Input
+                                            id="project-desc"
+                                            value={newProjectDesc}
+                                            onChange={(e) => setNewProjectDesc(e.target.value)}
+                                            placeholder="分析の目的など"
+                                        />
+                                    </div>
+                                </CardContent>
+                                <CardFooter className="justify-end pt-2">
+                                    <Button type="submit" size="sm">作成して開始</Button>
+                                </CardFooter>
                             </form>
-                        </div>
+                        </Card>
                     )}
 
                     {loading ? (
-                        <div className="text-center py-10">読み込み中...</div>
+                        <div className="text-center py-12 text-sm text-muted-foreground">読み込み中...</div>
                     ) : projects.length === 0 ? (
-                        <div className="text-center py-10 bg-white rounded-lg border border-dashed border-slate-300">
-                            <p className="text-slate-500">表示できるプロジェクトがありません。「新規プロジェクト作成」から始めてください。</p>
+                        <div className="text-center py-16 bg-white rounded-lg border border-dashed border-border">
+                            <FolderOpen className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+                            <p className="text-sm text-muted-foreground">プロジェクトがありません。「新規作成」から始めてください。</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             {projects.map((project) => (
                                 <Link
                                     key={project.id}
                                     href={`/projects/${project.id}/data`}
                                     className="block group relative"
                                 >
-                                    <div className="bg-card p-6 rounded-lg shadow-sm border border-border hover:shadow-md hover:border-primary/50 transition h-full flex flex-col">
-                                        <div className="flex-1 pr-8">
-                                            <h4 className="text-lg font-bold text-foreground group-hover:text-primary mb-2 truncate">
+                                    <Card className="shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-150 h-full">
+                                        <CardHeader className="pb-2 pr-12">
+                                            <CardTitle className="text-base font-semibold truncate group-hover:text-primary transition-colors">
                                                 {project.name}
-                                            </h4>
-                                            <p className="text-sm text-slate-600 line-clamp-3">
-                                                {project.description || 'No description'}
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="pb-3">
+                                            <p className="text-sm text-muted-foreground line-clamp-2">
+                                                {project.description || '概要なし'}
                                             </p>
-                                        </div>
-                                        <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+                                        </CardContent>
+                                        <CardFooter className="pt-3 border-t border-border flex justify-between text-xs text-muted-foreground">
                                             <span>ID: {project.id}</span>
-                                            <span>{new Date(project.created_at).toLocaleDateString()}</span>
-                                        </div>
-
+                                            <span>{new Date(project.created_at).toLocaleDateString('ja-JP')}</span>
+                                        </CardFooter>
                                         {/* Delete Button */}
                                         <button
                                             onClick={(e) => handleDeleteProject(e, project.id)}
-                                            className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors"
+                                            className="absolute top-3.5 right-3.5 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                                             title="プロジェクトを削除"
                                         >
-                                            <Trash2 className="w-5 h-5" />
+                                            <Trash2 className="w-4 h-4" />
                                         </button>
-                                    </div>
+                                    </Card>
                                 </Link>
                             ))}
                         </div>

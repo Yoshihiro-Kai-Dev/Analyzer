@@ -7,6 +7,13 @@ from app import schemas
 
 router = APIRouter()
 
+@router.get("/configs", response_model=List[schemas.AnalysisConfig])
+def list_configs(project_id: int, db: Session = Depends(get_db)):
+    """
+    プロジェクトの分析設定一覧を取得する
+    """
+    return db.query(models.AnalysisConfig).filter(models.AnalysisConfig.project_id == project_id).all()
+
 @router.post("/config", response_model=schemas.AnalysisConfig)
 def create_config(project_id: int, config: schemas.AnalysisConfigCreate, db: Session = Depends(get_db)):
     """
