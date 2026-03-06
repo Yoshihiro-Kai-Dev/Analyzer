@@ -7,4 +7,5 @@ pandas
 python-multipart
 lightgbm
 scikit-learn
+statsmodels
 matplotlib

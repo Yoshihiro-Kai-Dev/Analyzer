@@ -97,7 +97,9 @@ class AnalysisConfig(Base):
     target_column_id = Column(Integer, ForeignKey("column_metadata.id"), nullable=False, comment="目的変数となるカラム")
     
     task_type = Column(String, nullable=False, comment="regression or classification")
-    
+    model_type = Column(String, nullable=True, default="gradient_boosting",
+                        comment="使用モデル: gradient_boosting or logistic_regression")
+
     feature_settings = Column(JSON, nullable=True, comment="特徴量の設定")
     
     created_at = Column(DateTime, default=datetime.now)
@@ -148,8 +150,18 @@ class TrainResult(Base):
     
     # AIによる分析コメント
     ai_analysis_text = Column(String, nullable=True, comment="AIによる分析コメント")
-    
+
     model_path = Column(String, nullable=True, comment="保存されたモデルファイルのパス")
+
+    # 使用モデル
+    model_type = Column(String, nullable=True, comment="使用されたモデルタイプ")
+
+    # 線形/ロジスティック回帰の係数統計量 (p値・オッズ比・信頼区間)
+    coef_stats = Column(JSON, nullable=True, comment="係数統計量(p値/OR/CI)")
+
+    # 決定木
+    tree_structure = Column(JSON, nullable=True, comment="決定木のノード構造(JSON)")
+    decision_rules = Column(JSON, nullable=True, comment="IF/THENルール一覧(JSON)")
     
     created_at = Column(DateTime, default=datetime.now)
     

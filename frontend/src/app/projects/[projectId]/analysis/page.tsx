@@ -34,6 +34,7 @@ export default function AnalysisConfigPage() {
     const [mainTableId, setMainTableId] = useState<string>("");
     const [targetColumnId, setTargetColumnId] = useState<string>("");
     const [taskType, setTaskType] = useState<"regression" | "classification">("regression");
+    const [modelType, setModelType] = useState<"gradient_boosting" | "logistic_regression">("gradient_boosting");
 
     // 特徴量設定（簡易的に全部ONにするため、OFFにするものだけリスト化する等の実装もありだが、今回は全部持つ）
     // Array of indices or IDs
@@ -95,6 +96,7 @@ export default function AnalysisConfigPage() {
                 main_table_id: parseInt(mainTableId),
                 target_column_id: parseInt(targetColumnId),
                 task_type: taskType,
+                model_type: modelType,
                 feature_settings: {
                     selected_indices: selectedFeatureIndices,
                     details: suggestions.filter((_, idx) => selectedFeatureIndices.includes(idx))
@@ -263,6 +265,34 @@ export default function AnalysisConfigPage() {
                                     </AlertDescription>
                                 </Alert>
                             )}
+
+                            {/* モデル選択 */}
+                            <div className="space-y-3 pt-2">
+                                <Label className="text-base font-medium">使用モデルを選択</Label>
+                                <p className="text-sm text-gray-500">学習に使用するアルゴリズムを選択してください。</p>
+                                <RadioGroup
+                                    value={modelType}
+                                    onValueChange={(v) => setModelType(v as "gradient_boosting" | "logistic_regression")}
+                                    className="grid grid-cols-1 md:grid-cols-2 gap-3"
+                                >
+                                    <div className={`flex items-start space-x-3 border p-4 rounded-lg cursor-pointer transition-colors hover:bg-secondary/20 ${modelType === 'gradient_boosting' ? 'border-primary bg-primary/10' : 'border-input'}`}>
+                                        <RadioGroupItem value="gradient_boosting" id="m-gb" className="mt-1 text-primary" />
+                                        <div>
+                                            <Label htmlFor="m-gb" className="font-semibold cursor-pointer text-sm">勾配ブースティング (LightGBM)</Label>
+                                            <p className="text-xs text-gray-500 mt-0.5">非線形・複雑な関係の把握に強い高精度モデル</p>
+                                        </div>
+                                    </div>
+                                    <div className={`flex items-start space-x-3 border p-4 rounded-lg cursor-pointer transition-colors hover:bg-secondary/20 ${modelType === 'logistic_regression' ? 'border-primary bg-primary/10' : 'border-input'}`}>
+                                        <RadioGroupItem value="logistic_regression" id="m-lr" className="mt-1 text-primary" />
+                                        <div>
+                                            <Label htmlFor="m-lr" className="font-semibold cursor-pointer text-sm">
+                                                {taskType === 'classification' ? 'ロジスティック回帰' : '線形回帰'}
+                                            </Label>
+                                            <p className="text-xs text-gray-500 mt-0.5">シンプルで解釈しやすい線形モデル</p>
+                                        </div>
+                                    </div>
+                                </RadioGroup>
+                            </div>
                         </div>
                     )}
 

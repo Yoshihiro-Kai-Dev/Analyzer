@@ -1,9 +1,14 @@
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
+import joblib
+import statsmodels.api as sm
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, roc_auc_score, f1_score
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.tree import _tree as sk_tree
 from sqlalchemy.orm import Session
 import os
 import json
@@ -69,36 +74,82 @@ class MLService:
             job.progress = 50
             self.db.commit()
             
-            # 3. 学習
-            job.message = f"Training ({config.task_type})..."
+            # 3. 学習 (model_type に応じて分岐)
+            model_type = getattr(config, 'model_type', None) or 'gradient_boosting'
+            job.message = f"Training ({config.task_type} / {model_type})..."
             self.db.commit()
-            
-            # モデルパラメータ (簡易設定)
-            params = {
-                'objective': config.task_type, # 'regression' or 'binary'/'multiclass' -> 後で調整
-                'metric': 'rmse' if config.task_type == 'regression' else 'auc', # 簡易
-                'verbosity': -1,
-                'boosting_type': 'gbdt',
-                'n_estimators': 100
-            }
-            
-            # タスクタイプの補正 (lightgbmのobjectiveに合わせる)
-            if config.task_type == "classification":
-                # 多クラスか2値かで分岐すべきだが、簡易的にbinaryと見なすか、ユニーク数で判定
-                if y.nunique() > 2:
-                    params['objective'] = 'multiclass'
-                    params['num_class'] = y.nunique()
-                    params['metric'] = 'multi_logloss'
-                else:
-                    params['objective'] = 'binary'
-                    params['metric'] = 'binary_logloss' # aucだとeval setが必要
 
-            # Train/Test Split
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-            
-            model = lgb.LGBMRegressor(**params) if config.task_type == 'regression' else lgb.LGBMClassifier(**params)
-            logger.info(f"[ML-JOB] Model created: {type(model)}")
-            model.fit(X_train, y_train, eval_set=[(X_test, y_test)])
+
+            if model_type == 'logistic_regression':
+                # ── sklearn ロジスティック回帰 / 線形回帰 ──────────────────
+                # sklearn の線形モデルはスケールに敏感なため StandardScaler を適用
+                scaler = StandardScaler()
+                X_train_s = pd.DataFrame(scaler.fit_transform(X_train), columns=feature_names)
+                X_test_s  = pd.DataFrame(scaler.transform(X_test),      columns=feature_names)
+
+                if config.task_type == 'classification':
+                    sk_model = LogisticRegression(
+                        max_iter=1000, C=1.0, random_state=42, solver='lbfgs'
+                    )
+                    sk_model.fit(X_train_s, y_train)
+                    y_pred = sk_model.predict(X_test_s)
+                    # 係数の絶対値を特徴量重要度として使用
+                    coef = sk_model.coef_
+                    raw_imp = np.abs(coef).mean(axis=0)  # binary(1, n) / multiclass(k, n) 両対応
+                else:
+                    sk_model = LinearRegression()
+                    sk_model.fit(X_train_s, y_train)
+                    y_pred = sk_model.predict(X_test_s)
+                    raw_imp = np.abs(sk_model.coef_)
+
+                # 0–100 にスケーリング（LightGBM の split カウントと単位を揃えるため）
+                total_imp = raw_imp.sum() + 1e-10
+                importance = raw_imp / total_imp * 100
+
+                logger.info(f"[ML-JOB] {type(sk_model).__name__} trained.")
+
+                # モデル保存 (joblib)
+                model_path = os.path.join(MODEL_DIR, f"model_{job_id}.pkl")
+                joblib.dump({'model': sk_model, 'scaler': scaler}, model_path)
+
+                # ── statsmodels による統計量計算 ──────────────────────────
+                job.message = "Computing statistical metrics..."
+                self.db.commit()
+                coef_stats = self._compute_coef_stats(
+                    X_train_s, y_train, feature_names, config.task_type
+                )
+
+            else:
+                # ── LightGBM 勾配ブースティング (既存実装) ──────────────────
+                params = {
+                    'objective': config.task_type,
+                    'metric': 'rmse' if config.task_type == 'regression' else 'auc',
+                    'verbosity': -1,
+                    'boosting_type': 'gbdt',
+                    'n_estimators': 100
+                }
+                if config.task_type == "classification":
+                    if y.nunique() > 2:
+                        params['objective'] = 'multiclass'
+                        params['num_class'] = y.nunique()
+                        params['metric'] = 'multi_logloss'
+                    else:
+                        params['objective'] = 'binary'
+                        params['metric'] = 'binary_logloss'
+
+                sk_model = (lgb.LGBMRegressor(**params) if config.task_type == 'regression'
+                            else lgb.LGBMClassifier(**params))
+                logger.info(f"[ML-JOB] Model created: {type(sk_model)}")
+                sk_model.fit(X_train, y_train, eval_set=[(X_test, y_test)])
+                y_pred = sk_model.predict(X_test)
+                importance = sk_model.feature_importances_
+
+                # モデル保存 (LightGBM ネイティブ)
+                model_path = os.path.join(MODEL_DIR, f"model_{job_id}.txt")
+                sk_model.booster_.save_model(model_path)
+                X_test_s  = X_test  # スケーリングなし
+                coef_stats = None   # 勾配ブースティングは係数統計量なし
 
             job.progress = 80
             self.db.commit()
@@ -106,60 +157,75 @@ class MLService:
             # 4. 評価
             job.message = "Evaluating..."
             self.db.commit()
-            
+
             logger.info("[ML-JOB] Starting prediction on test set...")
-            y_pred = model.predict(X_test)
             logger.info(f"[ML-JOB] Prediction done. y_pred sample: {y_pred[:5]}")
-            
+
             metrics = {}
             if config.task_type == 'regression':
                 metrics['rmse'] = float(np.sqrt(mean_squared_error(y_test, y_pred)))
-                metrics['r2'] = float(r2_score(y_test, y_pred))
+                metrics['r2']   = float(r2_score(y_test, y_pred))
             else:
-                # 分類の場合、predictはクラス、predict_probaは確率
-                # LGBMClassifierのpredictはクラスを返す
-                 metrics['accuracy'] = float(accuracy_score(y_test, y_pred))
-                 # metrics['auc'] = roc_auc_score... (確率が必要なので省略、必要なら実装)
+                metrics['accuracy'] = float(accuracy_score(y_test, y_pred))
+                # AUC: ロジスティック回帰・GBM ともに predict_proba があれば計算
+                if hasattr(sk_model, 'predict_proba'):
+                    try:
+                        y_proba = sk_model.predict_proba(X_test_s)
+                        if y_proba.shape[1] == 2:  # 二値分類
+                            metrics['auc'] = float(roc_auc_score(y_test, y_proba[:, 1]))
+                        else:
+                            metrics['auc'] = float(roc_auc_score(
+                                y_test, y_proba, multi_class='ovr', average='macro'
+                            ))
+                    except Exception as e:
+                        logger.warning(f"[ML-JOB] AUC computation failed: {e}")
 
-            # 5. Feature Importance & Correlation
-            importance = model.feature_importances_
-            
-            # 相関係数の計算 (簡単な線形相関を見る)
-            # ターゲット変数との相関
-            # NOTE: dfには文字列(object)が含まれている可能性があるため、エンコード済みのXを使用する
-            # Xはpandas DataFrameであることを前提（train_test_splitしてもDataFrameが返る）
-            # feature_namesはXのcolumnsと一致しているはず
-            
-            # X_test + X_train を結合して全体の相関を見るか、Trainingデータだけで見るかだが、
-            # ここではX全体(前処理後)とyの相関を見るのが適切。
-            # しかしX, yはsplit前のものである。
+            # 5. 特徴量重要度 & 相関係数
             full_correlations = X.corrwith(y)
 
             fi_list = []
             for name, imp in zip(feature_names, importance):
                 corr_val = full_correlations.get(name, 0.0)
                 fi_list.append({
-                    "feature": name, 
+                    "feature": name,
                     "importance": float(imp),
                     "correlation": float(corr_val) if not pd.isna(corr_val) else 0.0
                 })
-            # Sort by importance
             fi_list.sort(key=lambda x: x['importance'], reverse=True)
 
-            # 6. AI Insight Generation (Simple Rule-based for now)
-            # 将来的にはLLM APIを叩く
-            insight_text = self._generate_simple_insight(config.task_type, metrics, fi_list)
+            # 6. AI インサイト生成
+            insight_text = self._generate_simple_insight(config.task_type, metrics, fi_list, model_type)
 
-            # 7. 保存
-            model_path = os.path.join(MODEL_DIR, f"model_{job_id}.txt")
-            model.booster_.save_model(model_path)
+            # 7. 決定木の学習・抽出（線形モデル時はスキップ）
+            if model_type == 'logistic_regression':
+                tree_structure = None
+                decision_rules = None
+                logger.info("[ML-JOB] Skipping decision tree (linear model selected).")
+            else:
+                job.message = "Training Decision Tree..."
+                self.db.commit()
 
+                n_classes  = int(y.nunique()) if config.task_type == "classification" else None
+                class_names = [str(c) for c in sorted(y.unique())] if config.task_type == "classification" else None
+                dt_model = self._train_decision_tree(X_train, y_train, config.task_type, n_classes)
+                tree_structure = self._sanitize_for_json(
+                    self._extract_tree_structure(dt_model, feature_names, class_names)
+                )
+                decision_rules = self._sanitize_for_json(
+                    self._extract_rules(dt_model, feature_names, class_names)
+                )
+
+            # 8. 保存
             result = models.TrainResult(
                 job_id=job.id,
                 metrics=metrics,
                 feature_importance=fi_list,
                 ai_analysis_text=insight_text,
-                model_path=model_path
+                model_path=model_path,
+                model_type=model_type,
+                coef_stats=self._sanitize_for_json(coef_stats) if coef_stats else None,
+                tree_structure=tree_structure,
+                decision_rules=decision_rules,
             )
             self.db.add(result)
             
@@ -333,12 +399,97 @@ class MLService:
         
         return X, y, X.columns.tolist(), encoders
 
-    def _generate_simple_insight(self, task_type: str, metrics: dict, fi_list: list) -> str:
+    def _compute_coef_stats(self, X_train, y_train, feature_names: list, task_type: str) -> list | None:
+        """
+        statsmodels を使って係数統計量（p値・信頼区間・オッズ比）を計算する。
+        X_train は StandardScaler 済みを想定（標準化偏回帰係数として解釈可能）。
+        """
+        try:
+            X_arr = X_train.values.astype(float) if hasattr(X_train, 'values') else np.array(X_train, dtype=float)
+            y_arr = np.array(y_train, dtype=float)
+
+            logger.info(f"[ML-JOB] _compute_coef_stats: X_arr.shape={X_arr.shape}, y_arr.shape={y_arr.shape}")
+
+            # NaN/Inf を 0 に置換
+            X_arr = np.nan_to_num(X_arr, nan=0.0, posinf=0.0, neginf=0.0)
+            y_arr = np.nan_to_num(y_arr, nan=0.0)
+
+            # 分散ゼロの列は statsmodels の定数項と完全共線性になるため除外
+            col_stds = X_arr.std(axis=0)
+            valid_mask = col_stds > 1e-10
+            removed = [feature_names[i] for i in range(len(feature_names)) if not valid_mask[i]]
+            if removed:
+                logger.warning(f"[ML-JOB] Removing zero-variance features: {removed}")
+            valid_features = [f for f, v in zip(feature_names, valid_mask) if v]
+            X_arr = X_arr[:, valid_mask]
+
+            if X_arr.shape[1] == 0:
+                logger.warning("[ML-JOB] No valid features after zero-variance removal.")
+                return None
+
+            X_sm = sm.add_constant(X_arr, prepend=True)  # 先頭に定数項追加
+
+            if task_type == 'regression':
+                # ── OLS (最小二乗法) ────────────────────────────────────
+                sm_result = sm.OLS(y_arr, X_sm).fit()
+                ci = sm_result.conf_int()  # DataFrame: shape (n_params, 2)
+
+                stats = []
+                for i, name in enumerate(valid_features):
+                    idx = i + 1  # const=0 をスキップ
+                    stats.append({
+                        "feature":  name,
+                        "coef":     round(float(sm_result.params[idx]), 4),
+                        "p_value":  round(float(sm_result.pvalues[idx]), 4),
+                        "ci_lower": round(float(ci[idx, 0]), 4),
+                        "ci_upper": round(float(ci[idx, 1]), 4),
+                    })
+
+            else:
+                n_classes = len(np.unique(y_arr))
+                if n_classes != 2:
+                    # 多クラスはオッズ比が定義しにくいため None を返す
+                    logger.info("[ML-JOB] Multiclass: skipping coef_stats (odds ratio not applicable).")
+                    return None
+
+                # ── Logit (二値ロジスティック回帰) ──────────────────────
+                sm_result = sm.Logit(y_arr, X_sm).fit(method='bfgs', maxiter=300, disp=False)
+                ci = sm_result.conf_int()
+
+                stats = []
+                for i, name in enumerate(valid_features):
+                    idx  = i + 1
+                    coef = float(sm_result.params[idx])
+                    stats.append({
+                        "feature":      name,
+                        "coef":         round(coef, 4),
+                        "odds_ratio":   round(float(np.exp(coef)), 4),
+                        "p_value":      round(float(sm_result.pvalues[idx]), 4),
+                        "ci_lower":     round(float(np.exp(ci[idx, 0])), 4),  # OR の CI
+                        "ci_upper":     round(float(np.exp(ci[idx, 1])), 4),
+                    })
+
+            # |係数| の大きい順にソート
+            stats.sort(key=lambda x: abs(x['coef']), reverse=True)
+            logger.info(f"[ML-JOB] coef_stats computed: {len(stats)} features")
+            return stats
+
+        except Exception as e:
+            logger.warning(f"[ML-JOB] _compute_coef_stats failed: {e}", exc_info=True)
+            return None
+
+    def _generate_simple_insight(self, task_type: str, metrics: dict, fi_list: list,
+                                  model_type: str = "gradient_boosting") -> str:
         """
         簡易的な分析インサイト（要約）を生成する
         """
+        model_label = {
+            "gradient_boosting": "勾配ブースティング (LightGBM)",
+            "logistic_regression": "ロジスティック回帰" if task_type == "classification" else "線形回帰",
+        }.get(model_type, model_type)
+
         lines = []
-        lines.append(f"### 分析結果レポート ({task_type})")
+        lines.append(f"### 分析結果レポート ({task_type} / {model_label})")
         
         # Metrics info
         lines.append("#### モデル精度")
@@ -375,7 +526,7 @@ class MLService:
                  lines.append(f"分類精度は {acc:.2f} です。不均衡データの可能性があります。")
         
         lines.append(f"最も影響を与えている要因は **{top_feat}** です。")
-        
+
         if top_features:
             first = top_features[0]
             corr = first['correlation']
@@ -383,6 +534,110 @@ class MLService:
                  lines.append(f"この特徴量は正の相関 ({corr:.2f}) があり、値が大きいほど目的変数が大きくなる傾向があります。")
             elif corr < -0.3:
                  lines.append(f"この特徴量は負の相関 ({corr:.2f}) があり、値が大きいほど目的変数が小さくなる傾向があります。")
-        
+
         return "\n".join(lines)
+
+    @staticmethod
+    def _sanitize_for_json(obj):
+        """NumPy 型を再帰的に Python ネイティブ型へ変換する（JSON シリアライズ対策）"""
+        if isinstance(obj, dict):
+            return {k: MLService._sanitize_for_json(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [MLService._sanitize_for_json(v) for v in obj]
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+
+    def _train_decision_tree(self, X_train, y_train, task_type: str, n_classes: int | None):
+        """決定木モデルを学習して返す"""
+        n_samples = len(X_train)
+        min_leaf = max(20, int(n_samples * 0.01))
+        common_params = dict(max_depth=5, min_samples_leaf=min_leaf, random_state=42)
+
+        if task_type == "classification":
+            dt = DecisionTreeClassifier(**common_params)
+        else:
+            dt = DecisionTreeRegressor(**common_params)
+
+        dt.fit(X_train, y_train)
+        logger.info(f"[DT] Decision tree trained. depth={dt.get_depth()}, leaves={dt.get_n_leaves()}")
+        return dt
+
+    def _extract_tree_structure(self, model, feature_names: list, class_names: list | None, node_id: int = 0) -> dict:
+        """sklearn の決定木から可視化用のネスト dict を再帰的に生成する"""
+        tree = model.tree_
+        left = tree.children_left[node_id]
+        right = tree.children_right[node_id]
+
+        node = {
+            "id": node_id,
+            "samples": int(tree.n_node_samples[node_id]),
+            "impurity": round(float(tree.impurity[node_id]), 4),
+            "is_leaf": bool(left == sk_tree.TREE_LEAF),
+        }
+
+        if left == sk_tree.TREE_LEAF:
+            value = tree.value[node_id]
+            if class_names is not None:
+                proba = value[0]
+                total_proba = float(sum(proba))  # sklearn は割合を格納する場合があるため sum で正規化
+                class_idx = int(np.argmax(proba))
+                node["prediction"] = class_names[class_idx]
+                node["confidence"] = round(float(proba[class_idx]) / total_proba, 3) if total_proba > 0 else 0.0
+                node["class_counts"] = [int(round(float(v) / total_proba * tree.n_node_samples[node_id])) for v in proba]
+            else:
+                node["prediction"] = round(float(value[0][0]), 4)
+                node["confidence"] = None
+                node["std"] = round(float(np.sqrt(tree.impurity[node_id])), 4)
+        else:
+            node["feature"] = feature_names[tree.feature[node_id]]
+            node["threshold"] = round(float(tree.threshold[node_id]), 4)
+            node["left"] = self._extract_tree_structure(model, feature_names, class_names, left)
+            node["right"] = self._extract_tree_structure(model, feature_names, class_names, right)
+
+        return node
+
+    def _extract_rules(self, model, feature_names: list, class_names: list | None, node_id: int = 0, conditions: list | None = None) -> list:
+        """決定木から IF/THEN ルール一覧を再帰的に抽出する"""
+        if conditions is None:
+            conditions = []
+
+        tree = model.tree_
+        left = tree.children_left[node_id]
+        right = tree.children_right[node_id]
+
+        if left == sk_tree.TREE_LEAF:
+            value = tree.value[node_id]
+            total = int(tree.n_node_samples[node_id])
+            if class_names is not None:
+                proba = value[0]
+                total_proba = float(sum(proba))  # sklearn は割合を格納する場合があるため sum で正規化
+                class_idx = int(np.argmax(proba))
+                prediction = class_names[class_idx]
+                confidence = round(float(proba[class_idx]) / total_proba, 3) if total_proba > 0 else 0.0
+            else:
+                prediction = round(float(value[0][0]), 4)
+                confidence = None
+                std = round(float(np.sqrt(tree.impurity[node_id])), 4)
+            return [{
+                "conditions": conditions if conditions else ["(全データ)"],
+                "prediction": prediction,
+                "confidence": confidence,
+                "std": std if confidence is None else None,
+                "samples": total,
+            }]
+
+        feature = feature_names[tree.feature[node_id]]
+        threshold = round(float(tree.threshold[node_id]), 4)
+
+        rules = []
+        rules.extend(self._extract_rules(model, feature_names, class_names, left,  conditions + [f"{feature} ≤ {threshold}"]))
+        rules.extend(self._extract_rules(model, feature_names, class_names, right, conditions + [f"{feature} > {threshold}"]))
+        return rules
 

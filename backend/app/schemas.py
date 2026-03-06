@@ -78,6 +78,7 @@ class AnalysisConfigBase(BaseModel):
     main_table_id: int
     target_column_id: int
     task_type: str # "regression" | "classification"
+    model_type: Optional[str] = "gradient_boosting"  # "gradient_boosting" | "logistic_regression"
     feature_settings: Optional[Dict[str, Any]] = None
 
 class AnalysisConfigCreate(AnalysisConfigBase):
@@ -97,6 +98,10 @@ class TrainResultBase(BaseModel):
     feature_importance: List[Dict[str, Any]]
     ai_analysis_text: Optional[str] = None
     model_path: Optional[str] = None
+    model_type: Optional[str] = None
+    coef_stats: Optional[List[Dict[str, Any]]] = None
+    tree_structure: Optional[Dict[str, Any]] = None
+    decision_rules: Optional[List[Dict[str, Any]]] = None
 
 class TrainResult(TrainResultBase):
     id: int
