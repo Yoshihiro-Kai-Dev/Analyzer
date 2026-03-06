@@ -40,6 +40,7 @@ def create_config(project_id: int, config: schemas.AnalysisConfigCreate, db: Ses
         main_table_id=config.main_table_id,
         target_column_id=config.target_column_id,
         task_type=config.task_type,
+        model_type=config.model_type or 'gradient_boosting',
         feature_settings=config.feature_settings
     )
     db.add(db_config)

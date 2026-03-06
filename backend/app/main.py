@@ -13,6 +13,16 @@ from app.db import models
 # テーブル作成（alembic導入前の一時的な処置）
 Base.metadata.create_all(bind=engine)
 
+# 既存テーブルへのカラム追加マイグレーション（冪等）
+from sqlalchemy import text
+with engine.connect() as _conn:
+    _conn.execute(text("ALTER TABLE train_results ADD COLUMN IF NOT EXISTS tree_structure JSONB"))
+    _conn.execute(text("ALTER TABLE train_results ADD COLUMN IF NOT EXISTS decision_rules JSONB"))
+    _conn.execute(text("ALTER TABLE train_results ADD COLUMN IF NOT EXISTS model_type VARCHAR"))
+    _conn.execute(text("ALTER TABLE train_results ADD COLUMN IF NOT EXISTS coef_stats JSONB"))
+    _conn.execute(text("ALTER TABLE analysis_configs ADD COLUMN IF NOT EXISTS model_type VARCHAR DEFAULT 'gradient_boosting'"))
+    _conn.commit()
+
 app = FastAPI(title="wel-analyzer API", version="0.1.0")
 
 # CORS設定
