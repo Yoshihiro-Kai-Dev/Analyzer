@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -29,7 +28,7 @@ import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
 import { useAppAlert } from '@/hooks/use-app-alert';
-import { API_BASE_URL } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 
 // physical table name prefix を除去する（例: upload_p5_20260304161857_01_ → 削除）
 const stripTablePrefix = (name: string) =>
@@ -164,7 +163,7 @@ export default function DashboardPage() {
     const [dtEdges, setDtEdges, onDtEdgesChange] = useEdgesState([]);
 
     useEffect(() => {
-        axios.get(`${API_BASE_URL}/api/projects/${projectId}/analysis/configs`)
+        apiClient.get(`/api/projects/${projectId}/analysis/configs`)
             .then(res => {
                 setConfigs(res.data);
                 const lastId = localStorage.getItem('lastAnalysisConfigId');
@@ -184,7 +183,7 @@ export default function DashboardPage() {
         }
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/api/projects/${projectId}/train/run/${configId}`);
+            const response = await apiClient.post(`/api/projects/${projectId}/train/run/${configId}`);
             setJob(response.data);
             setResult(null); // Reset result
             startPolling(response.data.id);
@@ -200,7 +199,7 @@ export default function DashboardPage() {
 
         pollingRef.current = setInterval(async () => {
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/train/status/${jobId}`);
+                const res = await apiClient.get(`/api/projects/${projectId}/train/status/${jobId}`);
                 setJob(res.data);
 
                 if (res.data.status === "completed") {
@@ -217,7 +216,7 @@ export default function DashboardPage() {
 
     const fetchResult = async (jobId: number) => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/train/result/${jobId}`);
+            const res = await apiClient.get(`/api/projects/${projectId}/train/result/${jobId}`);
             setResult(res.data);
 
             // 決定木の可視化データを生成

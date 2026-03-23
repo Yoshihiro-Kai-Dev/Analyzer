@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Trash2, Plus, Cpu, FolderOpen } from 'lucide-react';
+import { Trash2, Plus, Cpu, FolderOpen, Share2, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { API_BASE_URL } from '@/lib/api';
+import { apiClient } from '@/lib/api';
+import { removeToken } from '@/lib/auth';
+import ShareDialog from '@/components/share-dialog';
 
 interface Project {
     id: number;
@@ -34,45 +36,42 @@ export default function PortalPage() {
     const [isCreating, setIsCreating] = useState(false);
     const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    // 共有ダイアログの対象プロジェクトID
+    const [shareTargetId, setShareTargetId] = useState<number | null>(null);
 
     useEffect(() => {
         fetchProjects();
     }, []);
 
+    // プロジェクト一覧を取得する
     const fetchProjects = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/projects/`);
-            if (res.ok) {
-                const data = await res.json();
-                setProjects(data);
-            }
+            const res = await apiClient.get('/api/projects/');
+            setProjects(res.data);
         } catch (error) {
-            console.error('Failed to fetch projects', error);
+            console.error('プロジェクトの取得に失敗しました', error);
         } finally {
             setLoading(false);
         }
     };
 
+    // プロジェクトを新規作成する
     const handleCreateProject = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newProjectName) return;
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/projects/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newProjectName, description: newProjectDesc }),
+            const res = await apiClient.post('/api/projects/', {
+                name: newProjectName,
+                description: newProjectDesc,
             });
-
-            if (res.ok) {
-                const project = await res.json();
-                router.push(`/projects/${project.id}/data`);
-            }
+            router.push(`/projects/${res.data.id}/data`);
         } catch (error) {
-            console.error('Failed to create project', error);
+            console.error('プロジェクトの作成に失敗しました', error);
         }
     };
 
+    // 削除確認ダイアログを開く
     const handleDeleteClick = (e: React.MouseEvent, projectId: number) => {
         e.preventDefault();
         e.stopPropagation();
@@ -80,42 +79,54 @@ export default function PortalPage() {
         setDeleteTargetId(projectId);
     };
 
+    // プロジェクトを削除する
     const handleDeleteConfirm = async () => {
         if (deleteTargetId === null) return;
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/projects/${deleteTargetId}`, {
-                method: 'DELETE',
-            });
-
-            if (res.ok) {
-                setProjects(projects.filter(p => p.id !== deleteTargetId));
-                setDeleteTargetId(null);
-            } else {
-                setDeleteError('削除に失敗しました。');
-            }
+            await apiClient.delete(`/api/projects/${deleteTargetId}`);
+            setProjects(projects.filter(p => p.id !== deleteTargetId));
+            setDeleteTargetId(null);
         } catch (error) {
-            console.error('Failed to delete project', error);
-            setDeleteError('削除中にエラーが発生しました。');
+            console.error('プロジェクトの削除に失敗しました', error);
+            setDeleteError('削除に失敗しました。');
         }
+    };
+
+    // 共有ダイアログを開く
+    const handleShareClick = (e: React.MouseEvent, projectId: number) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShareTargetId(projectId);
+    };
+
+    // ログアウト処理: トークンを削除してログインページへ遷移する
+    const handleLogout = () => {
+        removeToken();
+        router.push('/login');
     };
 
     const deleteTarget = projects.find(p => p.id === deleteTargetId);
 
     return (
         <div className="min-h-screen bg-background">
-            {/* Header */}
+            {/* ヘッダー */}
             <header className="bg-white border-b border-border">
                 <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-3">
                     <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
                         <Cpu className="w-4 h-4 text-white" />
                     </div>
-                    <h1 className="text-base font-semibold text-foreground">分析くん</h1>
+                    <h1 className="text-base font-semibold text-foreground flex-1">分析くん</h1>
+                    {/* ログアウトボタン */}
+                    <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground">
+                        <LogOut className="w-4 h-4 mr-1.5" />
+                        ログアウト
+                    </Button>
                 </div>
             </header>
 
             <main className="max-w-7xl mx-auto px-6 py-10">
-                {/* Hero */}
+                {/* ヒーローセクション */}
                 <div className="mb-10">
                     <h2 className="text-2xl font-bold text-foreground">データ分析プロジェクト</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -123,7 +134,7 @@ export default function PortalPage() {
                     </p>
                 </div>
 
-                {/* Project List */}
+                {/* プロジェクト一覧 */}
                 <div className="space-y-5">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">プロジェクト一覧</h3>
@@ -136,6 +147,7 @@ export default function PortalPage() {
                         </Button>
                     </div>
 
+                    {/* 新規作成フォーム */}
                     {isCreating && (
                         <Card className="shadow-sm">
                             <CardHeader className="pb-4">
@@ -186,7 +198,7 @@ export default function PortalPage() {
                                     className="block group relative"
                                 >
                                     <Card className="shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-150 h-full">
-                                        <CardHeader className="pb-2 pr-12">
+                                        <CardHeader className="pb-2 pr-20">
                                             <CardTitle className="text-base font-semibold truncate group-hover:text-primary transition-colors">
                                                 {project.name}
                                             </CardTitle>
@@ -200,14 +212,25 @@ export default function PortalPage() {
                                             <span>ID: {project.id}</span>
                                             <span>{new Date(project.created_at).toLocaleDateString('ja-JP')}</span>
                                         </CardFooter>
-                                        {/* Delete Button */}
-                                        <button
-                                            onClick={(e) => handleDeleteClick(e, project.id)}
-                                            className="absolute top-3.5 right-3.5 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                                            title="プロジェクトを削除"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        {/* 右上のアクションボタン群 */}
+                                        <div className="absolute top-3.5 right-3.5 flex items-center gap-1">
+                                            {/* シェアボタン（将来的にshare-dialogと繋ぐ） */}
+                                            <button
+                                                onClick={(e) => handleShareClick(e, project.id)}
+                                                className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                                                title="プロジェクトを共有"
+                                            >
+                                                <Share2 className="w-4 h-4" />
+                                            </button>
+                                            {/* 削除ボタン */}
+                                            <button
+                                                onClick={(e) => handleDeleteClick(e, project.id)}
+                                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                                                title="プロジェクトを削除"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </Card>
                                 </Link>
                             ))}
@@ -216,7 +239,7 @@ export default function PortalPage() {
                 </div>
             </main>
 
-            {/* Delete Confirmation Dialog */}
+            {/* 削除確認ダイアログ */}
             <Dialog open={deleteTargetId !== null} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
                 <DialogContent>
                     <DialogHeader>
@@ -239,6 +262,15 @@ export default function PortalPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* 共有ダイアログ */}
+            {shareTargetId !== null && (
+                <ShareDialog
+                    projectId={shareTargetId}
+                    open={shareTargetId !== null}
+                    onClose={() => setShareTargetId(null)}
+                />
+            )}
         </div>
     );
 }
