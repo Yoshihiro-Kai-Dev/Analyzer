@@ -64,7 +64,7 @@ export default function AnalysisConfigPage() {
                     const response = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/analysis/suggest_features?main_table_id=${mainTableId}`);
                     setSuggestions(response.data);
                     // デフォルトですべて選択（インデックスで管理）
-                    setSelectedFeatureIndices(response.data.map((_, idx: number) => idx));
+                    setSelectedFeatureIndices(response.data.map((_: unknown, idx: number) => idx));
                 } catch (error) {
                     console.error("Failed to fetch suggestions", error);
                 } finally {
@@ -215,7 +215,7 @@ export default function AnalysisConfigPage() {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto p-1">
-                                {getTargetTable()?.columns.map(col => (
+                                {getTargetTable()?.columns.map((col: any) => (
                                     <div
                                         key={col.id}
                                         onClick={() => {
