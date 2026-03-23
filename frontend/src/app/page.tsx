@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Trash2, Plus, Cpu, FolderOpen, Share2, LogOut } from 'lucide-react';
+import { Trash2, Plus, Cpu, FolderOpen, Share2, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,10 +27,17 @@ interface Project {
     created_at: string;
 }
 
+// ログインユーザーの情報
+interface AuthUser {
+    username: string;
+    email?: string;
+}
+
 export default function PortalPage() {
     const router = useRouter();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
     const [newProjectName, setNewProjectName] = useState('');
     const [newProjectDesc, setNewProjectDesc] = useState('');
     const [isCreating, setIsCreating] = useState(false);
@@ -40,7 +47,9 @@ export default function PortalPage() {
     const [shareTargetId, setShareTargetId] = useState<number | null>(null);
 
     useEffect(() => {
+        // プロジェクト一覧とログインユーザーを並行取得する
         fetchProjects();
+        fetchCurrentUser();
     }, []);
 
     // プロジェクト一覧を取得する
@@ -52,6 +61,17 @@ export default function PortalPage() {
             console.error('プロジェクトの取得に失敗しました', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ログイン中のユーザー情報を取得する
+    const fetchCurrentUser = async () => {
+        try {
+            const res = await apiClient.get('/api/auth/me');
+            setCurrentUser(res.data);
+        } catch (error) {
+            // 取得失敗時はユーザー名表示を省略する（致命的エラーではない）
+            console.error('ユーザー情報の取得に失敗しました', error);
         }
     };
 
@@ -111,12 +131,22 @@ export default function PortalPage() {
     return (
         <div className="min-h-screen bg-background">
             {/* ヘッダー */}
-            <header className="bg-white border-b border-border">
+            <header className="bg-white border-b border-border sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
+                    {/* ロゴ */}
+                    <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center shrink-0">
                         <Cpu className="w-4 h-4 text-white" />
                     </div>
                     <h1 className="text-base font-semibold text-foreground flex-1">分析くん</h1>
+
+                    {/* ログインユーザー名 */}
+                    {currentUser && (
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <User className="w-3.5 h-3.5" />
+                            <span>{currentUser.username}</span>
+                        </div>
+                    )}
+
                     {/* ログアウトボタン */}
                     <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground">
                         <LogOut className="w-4 h-4 mr-1.5" />
@@ -127,7 +157,7 @@ export default function PortalPage() {
 
             <main className="max-w-7xl mx-auto px-6 py-10">
                 {/* ヒーローセクション */}
-                <div className="mb-10">
+                <div className="mb-10 animate-fade-in">
                     <h2 className="text-2xl font-bold text-foreground">データ分析プロジェクト</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                         CSVデータをアップロードするだけで、AIが自動で分析・インサイトを提供します。
@@ -149,8 +179,8 @@ export default function PortalPage() {
 
                     {/* 新規作成フォーム */}
                     {isCreating && (
-                        <Card className="shadow-sm">
-                            <CardHeader className="pb-4">
+                        <Card className="shadow-sm animate-slide-up">
+                            <CardHeader className="pb-3">
                                 <CardTitle className="text-base">新しいプロジェクトを作成</CardTitle>
                             </CardHeader>
                             <form onSubmit={handleCreateProject}>
@@ -182,22 +212,62 @@ export default function PortalPage() {
                         </Card>
                     )}
 
+                    {/* ローディング状態: スケルトンUI */}
                     {loading ? (
-                        <div className="text-center py-12 text-sm text-muted-foreground">読み込み中...</div>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {[...Array(3)].map((_, i) => (
+                                <div
+                                    key={i}
+                                    className="rounded-xl border bg-white p-5 space-y-3 animate-subtle-pulse"
+                                >
+                                    {/* タイトル行のスケルトン */}
+                                    <div className="h-4 w-2/3 rounded-md bg-gray-200" />
+                                    {/* 説明文のスケルトン */}
+                                    <div className="space-y-2">
+                                        <div className="h-3 w-full rounded-md bg-gray-200" />
+                                        <div className="h-3 w-4/5 rounded-md bg-gray-200" />
+                                    </div>
+                                    {/* フッターのスケルトン */}
+                                    <div className="pt-3 border-t border-gray-100 flex justify-between">
+                                        <div className="h-3 w-12 rounded-md bg-gray-200" />
+                                        <div className="h-3 w-16 rounded-md bg-gray-200" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     ) : projects.length === 0 ? (
-                        <div className="text-center py-16 bg-white rounded-lg border border-dashed border-border">
-                            <FolderOpen className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-                            <p className="text-sm text-muted-foreground">プロジェクトがありません。「新規作成」から始めてください。</p>
+                        /* 空状態: アクション誘導付きの視覚的なEmptyState */
+                        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-dashed border-border animate-fade-in">
+                            {/* アイコンを囲む薄い円形の背景 */}
+                            <div className="w-16 h-16 rounded-full bg-primary/8 flex items-center justify-center mb-4">
+                                <FolderOpen className="w-8 h-8 text-primary/50" />
+                            </div>
+                            <p className="text-base font-semibold text-foreground mb-1">
+                                プロジェクトがありません
+                            </p>
+                            <p className="text-sm text-muted-foreground mb-6 text-center max-w-xs">
+                                「新規作成」ボタンからプロジェクトを作成してCSVデータの分析を始めましょう。
+                            </p>
+                            <Button
+                                size="sm"
+                                onClick={() => setIsCreating(true)}
+                                className="gap-1.5"
+                            >
+                                <Plus className="w-4 h-4" />
+                                最初のプロジェクトを作成
+                            </Button>
                         </div>
                     ) : (
+                        /* プロジェクトカード一覧 */
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {projects.map((project) => (
+                            {projects.map((project, index) => (
                                 <Link
                                     key={project.id}
                                     href={`/projects/${project.id}/data`}
-                                    className="block group relative"
+                                    className="block group relative animate-slide-up"
+                                    style={{ animationDelay: `${index * 40}ms` }}
                                 >
-                                    <Card className="shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-150 h-full">
+                                    <Card className="shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-200 h-full group-hover:-translate-y-0.5">
                                         <CardHeader className="pb-2 pr-20">
                                             <CardTitle className="text-base font-semibold truncate group-hover:text-primary transition-colors">
                                                 {project.name}
@@ -214,7 +284,7 @@ export default function PortalPage() {
                                         </CardFooter>
                                         {/* 右上のアクションボタン群 */}
                                         <div className="absolute top-3.5 right-3.5 flex items-center gap-1">
-                                            {/* シェアボタン（将来的にshare-dialogと繋ぐ） */}
+                                            {/* 共有ボタン */}
                                             <button
                                                 onClick={(e) => handleShareClick(e, project.id)}
                                                 className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
