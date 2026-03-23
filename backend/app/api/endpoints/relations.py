@@ -4,6 +4,7 @@ from typing import List, Set
 from app.db.session import get_db
 from app.db import models
 from app import schemas
+from app.core.deps import get_current_user
 
 router = APIRouter()
 
@@ -118,6 +119,29 @@ def create_relation(project_id: int, relation: schemas.RelationCreate, db: Sessi
     db.refresh(db_relation)
     
     return db_relation
+
+@router.delete("/{relation_id}", response_model=schemas.Relation)
+def delete_relation(
+    project_id: int,
+    relation_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    リレーション定義を削除する
+    """
+    # 削除対象リレーションの取得
+    relation = db.query(models.RelationDefinition).filter(
+        models.RelationDefinition.id == relation_id
+    ).first()
+    if not relation:
+        raise HTTPException(status_code=404, detail="リレーションが見つかりません")
+
+    # DBからリレーションを削除してコミット
+    db.delete(relation)
+    db.commit()
+    return relation
+
 
 @router.get("/", response_model=List[schemas.Relation])
 def read_relations(project_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

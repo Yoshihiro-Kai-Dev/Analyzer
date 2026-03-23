@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 from app.db.session import get_db
 from app.db import models
 from app import schemas
+from app.core.deps import get_current_user
 
 router = APIRouter()
 
@@ -48,6 +49,80 @@ def create_config(project_id: int, config: schemas.AnalysisConfigCreate, db: Ses
     db.refresh(db_config)
     
     return db_config
+
+@router.put("/config/{config_id}", response_model=schemas.AnalysisConfig)
+def update_config(
+    project_id: int,
+    config_id: int,
+    config: schemas.AnalysisConfigCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    分析設定を更新する
+    name, feature_settings, main_table_id, target_column_id, task_type, model_typeを更新可能
+    """
+    # 更新対象設定の取得（プロジェクト整合性チェック込み）
+    db_config = db.query(models.AnalysisConfig).filter(
+        models.AnalysisConfig.id == config_id,
+        models.AnalysisConfig.project_id == project_id,
+    ).first()
+    if not db_config:
+        raise HTTPException(status_code=404, detail="分析設定が見つかりません")
+
+    # メインテーブルの存在確認とプロジェクト整合性
+    main_table = db.query(models.TableMetadata).filter(
+        models.TableMetadata.id == config.main_table_id
+    ).first()
+    if not main_table:
+        raise HTTPException(status_code=404, detail="Main table not found")
+    if main_table.project_id != project_id:
+        raise HTTPException(status_code=400, detail="Main table does not belong to the project")
+
+    # ターゲットカラムの存在確認
+    target_col = db.query(models.ColumnMetadata).filter(
+        models.ColumnMetadata.id == config.target_column_id
+    ).first()
+    if not target_col:
+        raise HTTPException(status_code=404, detail="Target column not found")
+
+    # 各フィールドを更新
+    db_config.name = config.name
+    db_config.main_table_id = config.main_table_id
+    db_config.target_column_id = config.target_column_id
+    db_config.task_type = config.task_type
+    db_config.model_type = config.model_type or "gradient_boosting"
+    db_config.feature_settings = config.feature_settings
+
+    db.commit()
+    db.refresh(db_config)
+    return db_config
+
+
+@router.delete("/config/{config_id}", response_model=schemas.AnalysisConfig)
+def delete_config(
+    project_id: int,
+    config_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    分析設定を削除する
+    関連するTrainJob（およびTrainResult）はDBのCascade設定で自動削除される
+    """
+    # 削除対象設定の取得（プロジェクト整合性チェック込み）
+    db_config = db.query(models.AnalysisConfig).filter(
+        models.AnalysisConfig.id == config_id,
+        models.AnalysisConfig.project_id == project_id,
+    ).first()
+    if not db_config:
+        raise HTTPException(status_code=404, detail="分析設定が見つかりません")
+
+    # DBから設定を削除（TrainJob・TrainResultはCascadeで自動削除）
+    db.delete(db_config)
+    db.commit()
+    return db_config
+
 
 @router.get("/suggest_features")
 def suggest_features(project_id: int, main_table_id: int, db: Session = Depends(get_db)):

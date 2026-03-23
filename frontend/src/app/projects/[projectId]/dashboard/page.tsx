@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Play, Loader2, TrendingUp, BarChart2, Sparkles, HelpCircle, GitBranch, ListTree, Table2 } from 'lucide-react';
+import { Play, Loader2, TrendingUp, BarChart2, Sparkles, HelpCircle, GitBranch, ListTree, Table2, XCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 import ReactFlow, {
@@ -155,6 +155,10 @@ export default function DashboardPage() {
     const [result, setResult] = useState<any>(null);
     const [configId, setConfigId] = useState<string>("");
     const [configs, setConfigs] = useState<any[]>([]);
+    // ポーリング中エラーをUI上に表示するための状態
+    const [pollingError, setPollingError] = useState<string | null>(null);
+    // キャンセル処理中フラグ
+    const [cancelling, setCancelling] = useState(false);
     const pollingRef = useRef<NodeJS.Timeout | null>(null);
     const { alertState, showAlert, closeAlert } = useAppAlert();
 
@@ -182,6 +186,9 @@ export default function DashboardPage() {
             return;
         }
 
+        // 学習開始時にポーリングエラーをリセット
+        setPollingError(null);
+
         try {
             const response = await apiClient.post(`/api/projects/${projectId}/train/run/${configId}`);
             setJob(response.data);
@@ -191,6 +198,25 @@ export default function DashboardPage() {
             console.error("Start training failed", error);
             const msg = error.response?.data?.detail || error.message || "不明なエラー";
             showAlert("学習開始エラー", `学習開始に失敗しました。\nエラー: ${msg}`);
+        }
+    };
+
+    // 学習をキャンセルする
+    const cancelTraining = async () => {
+        if (!job) return;
+        setCancelling(true);
+        try {
+            await apiClient.post(`/api/projects/${projectId}/train/cancel/${job.id}`);
+            // キャンセル成功後はポーリングを停止してUIをリセット
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setJob(null);
+            setPollingError(null);
+        } catch (error: any) {
+            console.error("Cancel training failed", error);
+            const msg = error.response?.data?.detail || error.message || "キャンセルに失敗しました";
+            showAlert("キャンセルエラー", msg);
+        } finally {
+            setCancelling(false);
         }
     };
 
@@ -208,8 +234,12 @@ export default function DashboardPage() {
                 } else if (res.data.status === "failed") {
                     clearInterval(pollingRef.current!);
                 }
-            } catch (err) {
+            } catch (err: any) {
+                // ポーリングエラーはコンソールに加えて状態変数にも設定してUIに表示する
                 console.error("Polling error", err);
+                const msg = err?.response?.data?.detail || err?.message || "ステータス確認中にエラーが発生しました";
+                setPollingError(msg);
+                clearInterval(pollingRef.current!);
             }
         }, 1000);
     };
@@ -268,12 +298,42 @@ export default function DashboardPage() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button onClick={startTraining} disabled={!configId || (job && job.status === "running")} className="bg-primary hover:opacity-90 text-primary-foreground">
-                        {job && job.status === "running" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                    <Button onClick={startTraining} disabled={!configId || (job && (job.status === "running" || job.status === "pending"))} className="bg-primary hover:opacity-90 text-primary-foreground">
+                        {job && (job.status === "running" || job.status === "pending") ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
                         学習実行
                     </Button>
+                    {/* 学習中・待機中のときのみキャンセルボタンを表示 */}
+                    {job && (job.status === "running" || job.status === "pending") && (
+                        <Button
+                            variant="outline"
+                            onClick={cancelTraining}
+                            disabled={cancelling}
+                            className="border-destructive text-destructive hover:bg-destructive/10"
+                        >
+                            {cancelling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XCircle className="w-4 h-4 mr-2" />}
+                            {cancelling ? "キャンセル中..." : "キャンセル"}
+                        </Button>
+                    )}
                 </div>
             </div>
+
+            {/* ポーリングエラー表示 */}
+            {pollingError && (
+                <Alert variant="destructive">
+                    <AlertTitle>ステータス取得エラー</AlertTitle>
+                    <AlertDescription>
+                        {pollingError}
+                        <Button
+                            variant="link"
+                            size="sm"
+                            className="ml-2 p-0 h-auto text-destructive underline"
+                            onClick={() => setPollingError(null)}
+                        >
+                            閉じる
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
 
             {/* Status Card */}
             {job && (

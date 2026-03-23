@@ -13,7 +13,13 @@ import { CheckCircle2, Circle, Loader2 } from "lucide-react"
 import axios from "axios"
 import { apiClient } from '@/lib/api'
 
-export function FileUpload({ projectId }: { projectId: string }) {
+interface FileUploadProps {
+    projectId: string
+    /** アップロード・型確認が完了したときに呼ばれるコールバック */
+    onUploadComplete?: () => void
+}
+
+export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
     const [file, setFile] = useState<File | null>(null)
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "type_review" | "completed">("idle")
     const [uploadProgress, setUploadProgress] = useState(0)
@@ -68,6 +74,8 @@ export function FileUpload({ projectId }: { projectId: string }) {
                 )
             )
             setStatus("completed")
+            // 親コンポーネントにアップロード完了を通知（テーブル一覧の更新など）
+            onUploadComplete?.()
         } catch (err: any) {
             const detail = err.response?.data?.detail
             setError(typeof detail === 'string' ? detail : "型情報の保存に失敗しました")
@@ -120,8 +128,13 @@ export function FileUpload({ projectId }: { projectId: string }) {
                     setStatus("idle")
                     if (pollingInterval.current) clearInterval(pollingInterval.current)
                 }
-            } catch (err) {
+            } catch (err: any) {
+                // ポーリング中のエラーはコンソールに加えてUI上にも表示する
                 console.error("Polling error", err)
+                const msg = err?.response?.data?.detail || err?.message || "ステータス確認中にエラーが発生しました"
+                setError(msg)
+                setStatus("idle")
+                if (pollingInterval.current) clearInterval(pollingInterval.current)
             }
         }
 
