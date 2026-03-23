@@ -2,6 +2,43 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+# --- User Schemas ---
+class UserCreate(BaseModel):
+    """新規ユーザー作成リクエスト"""
+    username: str
+    password: str
+
+class UserResponse(BaseModel):
+    """ユーザー情報レスポンス"""
+    id: int
+    username: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- Token Schemas ---
+class Token(BaseModel):
+    """JWTアクセストークンレスポンス"""
+    access_token: str
+    token_type: str
+
+# --- ProjectMember Schemas ---
+class ProjectMemberAdd(BaseModel):
+    """メンバー追加リクエスト"""
+    username: str
+    role: str  # owner, editor, viewer
+
+class ProjectMemberResponse(BaseModel):
+    """メンバー情報レスポンス（usernameを含む）"""
+    id: int
+    user_id: int
+    username: str
+    role: str
+
+    class Config:
+        from_attributes = True
+
 # --- Project Schemas ---
 class ProjectBase(BaseModel):
     name: str

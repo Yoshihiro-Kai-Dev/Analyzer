@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from 'react';
-import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
 import { useAppAlert } from '@/hooks/use-app-alert';
 import { useParams } from 'next/navigation';
-import { API_BASE_URL } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 
 export default function AnalysisConfigPage() {
     const params = useParams();
@@ -46,7 +45,7 @@ export default function AnalysisConfigPage() {
         if (!projectId) return;
         const fetchTables = async () => {
             try {
-                const response = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/tables`);
+                const response = await apiClient.get(`/api/projects/${projectId}/tables`);
                 setTables(response.data);
             } catch (error) {
                 console.error("Failed to fetch tables", error);
@@ -61,7 +60,7 @@ export default function AnalysisConfigPage() {
             const fetchSuggestions = async () => {
                 setLoading(true);
                 try {
-                    const response = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/analysis/suggest_features?main_table_id=${mainTableId}`);
+                    const response = await apiClient.get(`/api/projects/${projectId}/analysis/suggest_features?main_table_id=${mainTableId}`);
                     setSuggestions(response.data);
                     // デフォルトですべて選択（インデックスで管理）
                     setSelectedFeatureIndices(response.data.map((_: unknown, idx: number) => idx));
@@ -103,7 +102,7 @@ export default function AnalysisConfigPage() {
                 }
             };
 
-            const response = await axios.post(`${API_BASE_URL}/api/projects/${projectId}/analysis/config`, payload);
+            const response = await apiClient.post(`/api/projects/${projectId}/analysis/config`, payload);
             localStorage.setItem('lastAnalysisConfigId', response.data.id);
             showAlert("保存完了", "分析設定を保存しました。");
 

@@ -10,3 +10,5 @@ lightgbm
 scikit-learn
 statsmodels
 matplotlib
+python-jose[cryptography]
+bcrypt

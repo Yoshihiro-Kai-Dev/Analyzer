@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
 import axios from "axios"
-import { API_BASE_URL } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 
 export function FileUpload({ projectId }: { projectId: string }) {
     const [file, setFile] = useState<File | null>(null)
@@ -61,8 +61,8 @@ export function FileUpload({ projectId }: { projectId: string }) {
             const changedCols = reviewColumns.filter(col => col.inferred_type !== col.originalType)
             await Promise.all(
                 changedCols.map(col =>
-                    axios.patch(
-                        `${API_BASE_URL}/api/projects/${projectId}/tables/${reviewTableId}/columns/${col.id}`,
+                    apiClient.patch(
+                        `/api/projects/${projectId}/tables/${reviewTableId}/columns/${col.id}`,
                         { inferred_type: col.inferred_type }
                     )
                 )
@@ -77,7 +77,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
     const startPolling = (taskId: string) => {
         const poll = async () => {
             try {
-                const response = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/upload/status/${taskId}`)
+                const response = await apiClient.get(`/api/projects/${projectId}/upload/status/${taskId}`)
                 const data = response.data
 
                 setProcessingProgress(data.progress || 0)
@@ -89,7 +89,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
 
                     // テーブル一覧からアップロードしたテーブルのカラムID付き情報を取得
                     try {
-                        const tablesRes = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/tables`)
+                        const tablesRes = await apiClient.get(`/api/projects/${projectId}/tables`)
                         const uploadedTable = tablesRes.data.find(
                             (t: any) => t.physical_table_name === data.result.physical_table_name
                         )
@@ -140,7 +140,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
         formData.append("file", file)
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/api/projects/${projectId}/upload/csv`, formData, {
+            const response = await apiClient.post(`/api/projects/${projectId}/upload/csv`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 },

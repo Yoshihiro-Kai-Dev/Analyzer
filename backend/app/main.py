@@ -30,7 +30,10 @@ def read_root():
     return {"message": "Welcome to wel-analyzer API"}
 
 # ルーターの追加
-from app.api.endpoints import projects, upload, tables, relations, analysis, train
+from app.api.endpoints import projects, upload, tables, relations, analysis, train, auth
+
+# 認証ルーター
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 

@@ -15,7 +15,6 @@ import ReactFlow, {
     OnConnect,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { TableNode } from '@/components/relation-editor/TableNode';
 import { JoinConfigDialog, JoinConfig } from '@/components/relation-editor/JoinConfigDialog';
@@ -62,7 +61,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 
 
 import { useParams } from 'next/navigation';
-import { API_BASE_URL } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 
 export default function RelationsPage() {
     const params = useParams();
@@ -80,8 +79,8 @@ export default function RelationsPage() {
         setLoading(true);
         try {
             const [tablesRes, relationsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/projects/${projectId}/tables`),
-                axios.get(`${API_BASE_URL}/api/projects/${projectId}/relations`)
+                apiClient.get(`/api/projects/${projectId}/tables`),
+                apiClient.get(`/api/projects/${projectId}/relations`)
             ]);
 
             const tables = tablesRes.data;
@@ -176,7 +175,7 @@ export default function RelationsPage() {
                 cardinality: config.cardinality
             };
 
-            await axios.post(`${API_BASE_URL}/api/projects/${projectId}/relations`, payload);
+            await apiClient.post(`/api/projects/${projectId}/relations`, payload);
 
             // エッジを追加
             const newEdge: Edge = {

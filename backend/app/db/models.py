@@ -3,6 +3,22 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.session import Base
 
+class User(Base):
+    """
+    ユーザー情報
+    """
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, nullable=False, index=True, comment="ユーザー名")
+    hashed_password = Column(String, nullable=False, comment="ハッシュ化されたパスワード")
+    created_at = Column(DateTime, default=datetime.now, comment="作成日時")
+
+    # リレーション
+    owned_projects = relationship("Project", back_populates="owner")
+    memberships = relationship("ProjectMember", back_populates="user", cascade="all, delete-orphan")
+
+
 class Project(Base):
     """
     プロジェクト情報
@@ -14,7 +30,12 @@ class Project(Base):
     description = Column(String, nullable=True, comment="プロジェクト概要")
     created_at = Column(DateTime, default=datetime.now)
 
+    # オーナーユーザーID（nullable=Trueで既存データとの互換性を保つ）
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="オーナーユーザーID")
+
     # リレーション
+    owner = relationship("User", back_populates="owned_projects")
+    members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     tables = relationship("TableMetadata", back_populates="project", cascade="all, delete-orphan")
     analysis_configs = relationship("AnalysisConfig", back_populates="project", cascade="all, delete-orphan")
 
@@ -131,6 +152,23 @@ class TrainJob(Base):
     
     config = relationship("AnalysisConfig", back_populates="jobs")
     result = relationship("TrainResult", uselist=False, back_populates="job", cascade="all, delete-orphan")
+
+
+class ProjectMember(Base):
+    """
+    プロジェクトメンバーの管理（オーナー・編集者・閲覧者）
+    """
+    __tablename__ = "project_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True, comment="所属プロジェクトID")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True, comment="メンバーのユーザーID")
+    # ロール: owner（オーナー）, editor（編集者）, viewer（閲覧者）
+    role = Column(String, nullable=False, default="viewer", comment="owner, editor, viewer")
+
+    # リレーション
+    project = relationship("Project", back_populates="members")
+    user = relationship("User", back_populates="memberships")
 
 
 class UploadTask(Base):
