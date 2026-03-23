@@ -39,6 +39,7 @@ class Project(Base):
     members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     tables = relationship("TableMetadata", back_populates="project", cascade="all, delete-orphan")
     analysis_configs = relationship("AnalysisConfig", back_populates="project", cascade="all, delete-orphan")
+    upload_tasks = relationship("UploadTask", cascade="all, delete-orphan")
 
 
 class TableMetadata(Base):
@@ -181,7 +182,7 @@ class UploadTask(Base):
     __tablename__ = "upload_tasks"
 
     id = Column(String, primary_key=True, comment="UUID形式のタスクID")
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     status = Column(String, default="processing", comment="processing, completed, failed")
     progress = Column(Integer, default=0, comment="進捗（0-100）")
     message = Column(String, nullable=True, comment="進捗メッセージ")
