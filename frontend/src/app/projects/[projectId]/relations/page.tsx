@@ -230,6 +230,8 @@ export default function RelationsPage() {
                 id: `e${payload.parent_table_id}-${payload.child_table_id}`,
                 source: pendingConnection.source!,
                 target: pendingConnection.target!,
+                sourceHandle: `source-${config.parentColumn}`,
+                targetHandle: `target-${config.childColumn}`,
                 label: config.cardinality === 'OneToMany' ? '1:N' : '1:1',
                 type: 'smoothstep',
                 animated: true, // 新規追加分はアニメーションで強調
