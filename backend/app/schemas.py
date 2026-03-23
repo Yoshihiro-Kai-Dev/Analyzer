@@ -165,3 +165,17 @@ class TrainJob(TrainJobBase):
 
     class Config:
         from_attributes = True
+
+
+# --- Prediction Job Schemas ---
+class PredictionJobResponse(BaseModel):
+    """予測ジョブのレスポンス"""
+    id: str
+    config_id: int
+    status: str
+    row_count: Optional[int] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
