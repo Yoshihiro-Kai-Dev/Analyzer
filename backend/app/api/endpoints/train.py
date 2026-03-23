@@ -50,6 +50,26 @@ def run_ml_task(job_id: int):
     finally:
         db.close()
 
+@router.get("/jobs", response_model=list[schemas.TrainJob])
+def list_jobs(
+    project_id: int,
+    config_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    プロジェクト内の学習ジョブ一覧を返す
+    config_id を指定するとその設定に絞り込む
+    """
+    query = (
+        db.query(models.TrainJob)
+        .join(models.AnalysisConfig, models.TrainJob.config_id == models.AnalysisConfig.id)
+        .filter(models.AnalysisConfig.project_id == project_id)
+    )
+    if config_id is not None:
+        query = query.filter(models.TrainJob.config_id == config_id)
+    return query.order_by(models.TrainJob.id.desc()).all()
+
+
 @router.get("/status/{job_id}", response_model=schemas.TrainJob)
 def get_status(project_id: int, job_id: int, db: Session = Depends(get_db)):
     job = db.query(models.TrainJob).filter(models.TrainJob.id == job_id).first()
