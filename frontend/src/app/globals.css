@@ -3,40 +3,71 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* =====================================================
+   Tailwind CSS v4 テーマ設定
+   CSS変数とTailwindトークンのマッピング
+   ===================================================== */
 @theme inline {
+  /* --- カラー --- */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* プライマリ: メインアクション・強調表示 */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  /* セカンダリ: 補助的なUI要素 */
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  /* ミュート: 非強調テキスト・背景 */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  /* アクセント: ホバー・選択状態 */
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  /* デストラクティブ: 削除・警告 */
+  --color-destructive: var(--destructive);
+
+  /* ボーダー・入力・リング */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* チャート用カラーパレット（5色） */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* サイドバー専用カラー */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* --- フォント --- */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
+
+  /* --- 角丸スケール ---
+     sm: ボタン・バッジ等の小要素
+     md: インプット・メニュー項目
+     lg: カード・モーダル（基準値）
+     xl〜4xl: 大きなパネル・モーダル */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -46,44 +77,59 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
+/* =====================================================
+   ライトモード カラーパレット
+   テーマ: クリーンホワイト / ブルー系
+   ===================================================== */
 :root {
+  /* 角丸基準値 */
   --radius: 0.5rem;
 
-  /* Clean White / Blue Theme */
+  /* 背景・テキスト */
   --background: hsl(210, 40%, 98%);
   --foreground: hsl(222, 47%, 11%);
 
+  /* カード */
   --card: hsl(0, 0%, 100%);
   --card-foreground: hsl(222, 47%, 11%);
 
+  /* ポップオーバー */
   --popover: hsl(0, 0%, 100%);
   --popover-foreground: hsl(222, 47%, 11%);
 
+  /* プライマリ: ブルー系 */
   --primary: hsl(221, 83%, 53%);
   --primary-foreground: hsl(0, 0%, 100%);
 
+  /* セカンダリ: 薄いグレーブルー */
   --secondary: hsl(210, 40%, 96%);
   --secondary-foreground: hsl(222, 47%, 11%);
 
+  /* ミュート: 非強調 */
   --muted: hsl(210, 40%, 96%);
   --muted-foreground: hsl(215, 16%, 47%);
 
+  /* アクセント: ホバー背景 */
   --accent: hsl(210, 40%, 93%);
   --accent-foreground: hsl(222, 47%, 11%);
 
+  /* デストラクティブ: 赤系 */
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 100%);
 
+  /* ボーダー・入力・フォーカスリング */
   --border: hsl(214, 32%, 91%);
   --input: hsl(214, 32%, 91%);
   --ring: hsl(221, 83%, 53%);
 
+  /* チャートカラー（青・緑・オレンジ・紫・赤） */
   --chart-1: hsl(221, 83%, 53%);
   --chart-2: hsl(142, 71%, 45%);
   --chart-3: hsl(38, 92%, 50%);
   --chart-4: hsl(280, 65%, 60%);
   --chart-5: hsl(0, 84%, 60%);
 
+  /* サイドバー */
   --sidebar: hsl(0, 0%, 100%);
   --sidebar-foreground: hsl(222, 47%, 11%);
   --sidebar-primary: hsl(221, 83%, 53%);
@@ -94,6 +140,9 @@
   --sidebar-ring: hsl(221, 83%, 53%);
 }
 
+/* =====================================================
+   ダークモード カラーパレット
+   ===================================================== */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -101,6 +150,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
+  /* ダークモードのプライマリは明るいグレー */
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
@@ -113,11 +163,13 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  /* チャートカラー（ダーク用） */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
+  /* サイドバー（ダーク） */
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -128,6 +180,9 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* =====================================================
+   ベーススタイル
+   ===================================================== */
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -136,4 +191,106 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* =====================================================
+     フォントサイズ階層
+     見出し: text-2xl（24px）〜 text-4xl（36px）
+     サブ見出し: text-lg（18px）〜 text-xl（20px）
+     本文: text-sm（14px）〜 text-base（16px）
+     補助テキスト: text-xs（12px）
+     数値表示: font-mono text-xl〜text-3xl
+     ===================================================== */
+}
+
+/* =====================================================
+   共通アニメーション
+   フェードイン・スライドアップは画面遷移や要素出現に使用
+   ===================================================== */
+
+/* フェードイン: 0.2s で透明→不透明 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* スライドアップ: 下から8px浮き上がりながらフェードイン */
+@keyframes slideUp {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* スライドイン（左から）: サイドパネル・ドロワー用 */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* パルス（強調点滅）: ローディング・通知バッジ用 */
+@keyframes subtlePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+/* アニメーションユーティリティクラス */
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s ease-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.2s ease-out;
+}
+
+.animate-subtle-pulse {
+  animation: subtlePulse 1.5s ease-in-out infinite;
+}
+
+/* =====================================================
+   共通ユーティリティ
+   ===================================================== */
+
+/* --- カードのパディング統一 ---
+   セクション内のコンテンツは px-6 py-5 を基準に */
+
+/* スクロールバーを細く表示（WebKit系ブラウザ） */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: hsl(214, 32%, 85%);
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: hsl(214, 32%, 70%);
+}
+
+/* テキストの省略（複数行対応は line-clamp-N を使用） */
+.text-ellipsis-1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* フォーカスリングのスタイル統一 */
+.focus-ring {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
 }

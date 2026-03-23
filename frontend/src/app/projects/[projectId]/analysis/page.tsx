@@ -25,13 +25,20 @@ import { useAppAlert } from '@/hooks/use-app-alert';
 import { useParams } from 'next/navigation';
 import { apiClient } from '@/lib/api'
 
+// ステップの定義（ラベルと番号の対応）
+const STEPS = [
+    { number: 1, label: 'テーブル選択' },
+    { number: 2, label: '目的変数' },
+    { number: 3, label: '特徴量設定' },
+];
+
 export default function AnalysisConfigPage() {
     const params = useParams();
     const projectId = params.projectId as string;
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
 
-    // Data
+    // データ
     const [tables, setTables] = useState<any[]>([]);
     const [suggestions, setSuggestions] = useState<any[]>([]);
 
@@ -43,15 +50,14 @@ export default function AnalysisConfigPage() {
     const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
     const [deleting, setDeleting] = useState(false);
 
-    // Selections
+    // 選択値
     const [configName, setConfigName] = useState<string>("");
     const [mainTableId, setMainTableId] = useState<string>("");
     const [targetColumnId, setTargetColumnId] = useState<string>("");
     const [taskType, setTaskType] = useState<"regression" | "classification">("regression");
     const [modelType, setModelType] = useState<"gradient_boosting" | "logistic_regression">("gradient_boosting");
 
-    // 特徴量設定（簡易的に全部ONにするため、OFFにするものだけリスト化する等の実装もありだが、今回は全部持つ）
-    // Array of indices or IDs
+    // 特徴量設定（選択中インデックスの配列）
     const [selectedFeatureIndices, setSelectedFeatureIndices] = useState<number[]>([]);
     const [validationError, setValidationError] = useState<string | null>(null);
     const { alertState, showAlert, closeAlert } = useAppAlert();
@@ -76,7 +82,7 @@ export default function AnalysisConfigPage() {
                 const response = await apiClient.get(`/api/projects/${projectId}/tables`);
                 setTables(response.data);
             } catch (error) {
-                console.error("Failed to fetch tables", error);
+                console.error("テーブル一覧の取得に失敗しました", error);
             }
         };
         fetchTables();
@@ -84,7 +90,7 @@ export default function AnalysisConfigPage() {
         fetchConfigs();
     }, [projectId]);
 
-    // Step 3に入ったときに提案を取得
+    // Step 3 に入ったときに特徴量提案を取得
     useEffect(() => {
         if (step === 3 && mainTableId && projectId) {
             const fetchSuggestions = async () => {
@@ -92,10 +98,10 @@ export default function AnalysisConfigPage() {
                 try {
                     const response = await apiClient.get(`/api/projects/${projectId}/analysis/suggest_features?main_table_id=${mainTableId}`);
                     setSuggestions(response.data);
-                    // デフォルトですべて選択（インデックスで管理）
+                    // デフォルトですべての特徴量を選択済みにする
                     setSelectedFeatureIndices(response.data.map((_: unknown, idx: number) => idx));
                 } catch (error) {
-                    console.error("Failed to fetch suggestions", error);
+                    console.error("特徴量提案の取得に失敗しました", error);
                 } finally {
                     setLoading(false);
                 }
@@ -139,13 +145,21 @@ export default function AnalysisConfigPage() {
             showAlert("保存完了", "分析設定を保存しました。");
 
         } catch (error) {
-            console.error("Save failed", error);
+            console.error("保存に失敗しました", error);
             showAlert("保存エラー", "保存に失敗しました。");
         }
     }
 
+    // 選択中のメインテーブルオブジェクトを返す
     const getTargetTable = () => {
         return tables.find(t => t.id.toString() === mainTableId);
+    }
+
+    // 選択中の目的変数カラムオブジェクトを返す
+    const getTargetColumn = () => {
+        const table = getTargetTable();
+        if (!table) return null;
+        return table.columns.find((c: any) => c.id.toString() === targetColumnId);
     }
 
     const toggleFeature = (index: number) => {
@@ -253,31 +267,74 @@ export default function AnalysisConfigPage() {
                     <CardTitle>分析設定ウィザード</CardTitle>
                     <CardDescription>分析のパラメータを設定します。</CardDescription>
 
-                    {/* Stepper */}
-                    <div className="flex items-center space-x-4 mt-4 text-sm font-medium">
-                        <div className={`flex items-center ${step >= 1 ? "text-primary" : "text-muted-foreground"}`}>
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 mr-2 ${step >= 1 ? "border-primary bg-primary/10" : "border-muted"}`}>1</div>
-                            テーブル選択
-                        </div>
-                        <div className="w-10 h-0.5 bg-muted"></div>
-                        <div className={`flex items-center ${step >= 2 ? "text-primary" : "text-muted-foreground"}`}>
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 mr-2 ${step >= 2 ? "border-primary bg-primary/10" : "border-muted"}`}>2</div>
-                            目的変数
-                        </div>
-                        <div className="w-10 h-0.5 bg-muted"></div>
-                        <div className={`flex items-center ${step >= 3 ? "text-primary" : "text-muted-foreground"}`}>
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 mr-2 ${step >= 3 ? "border-primary bg-primary/10" : "border-muted"}`}>3</div>
-                            特徴量設定
-                        </div>
+                    {/* ── ステップインジケーター（視覚的強化版） ── */}
+                    <div className="flex items-center mt-6">
+                        {STEPS.map((s, index) => {
+                            // 完了済み: step番号より前、現在: 一致、未完了: 後
+                            const isCompleted = step > s.number;
+                            const isCurrent = step === s.number;
+                            const isPending = step < s.number;
+
+                            return (
+                                <div key={s.number} className="flex items-center">
+                                    {/* ステップ円とラベル */}
+                                    <div className="flex flex-col items-center gap-1.5">
+                                        <div
+                                            className={`
+                                                w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold
+                                                transition-all duration-200
+                                                ${isCompleted
+                                                    ? 'bg-primary text-primary-foreground shadow-sm'
+                                                    : isCurrent
+                                                    ? 'bg-primary/15 border-2 border-primary text-primary'
+                                                    : 'bg-muted border-2 border-muted-foreground/20 text-muted-foreground'}
+                                            `}
+                                        >
+                                            {/* 完了済みはチェックマークアイコンを表示 */}
+                                            {isCompleted
+                                                ? <CheckCircle2 className="w-5 h-5" />
+                                                : s.number}
+                                        </div>
+                                        <span
+                                            className={`
+                                                text-xs whitespace-nowrap
+                                                ${isCurrent
+                                                    ? 'font-bold text-primary'
+                                                    : isCompleted
+                                                    ? 'font-medium text-primary/80'
+                                                    : 'text-muted-foreground'}
+                                            `}
+                                        >
+                                            {s.label}
+                                        </span>
+                                    </div>
+
+                                    {/* ステップ間の接続線（最後のステップには不要） */}
+                                    {index < STEPS.length - 1 && (
+                                        <div
+                                            className={`
+                                                w-16 h-0.5 mx-2 mb-5 rounded-full transition-all duration-300
+                                                ${isCompleted ? 'bg-primary' : 'bg-muted-foreground/20'}
+                                            `}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
+
+                    {/* バリデーションエラー表示 */}
                     {validationError && (
-                        <p className="text-sm text-destructive mt-2">{validationError}</p>
+                        <p className="text-sm text-destructive mt-2 flex items-center gap-1">
+                            <AlertCircle className="w-4 h-4" />
+                            {validationError}
+                        </p>
                     )}
                 </CardHeader>
                 <Separator />
                 <CardContent className="py-8 min-h-[400px]">
 
-                    {/* Step 1: Main Table Selection */}
+                    {/* ── Step 1: メインテーブル選択 ── */}
                     {step === 1 && (
                         <div className="space-y-6">
                             <div className="space-y-2">
@@ -298,7 +355,14 @@ export default function AnalysisConfigPage() {
 
                             <RadioGroup value={mainTableId} onValueChange={setMainTableId} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {tables.map((table) => (
-                                    <div key={table.id} className={`max-w-full flex items-start space-x-3 border p-4 rounded-lg cursor-pointer hover:bg-secondary/20 transition-colors ${mainTableId === table.id.toString() ? "border-primary bg-primary/10" : "border-input"}`}>
+                                    <div
+                                        key={table.id}
+                                        className={`
+                                            max-w-full flex items-start space-x-3 border p-4 rounded-lg cursor-pointer
+                                            hover:bg-secondary/20 transition-colors
+                                            ${mainTableId === table.id.toString() ? "border-primary bg-primary/10" : "border-input"}
+                                        `}
+                                    >
                                         <RadioGroupItem value={table.id.toString()} id={`t-${table.id}`} className="mt-1 text-primary" />
                                         <div className="grid gap-1.5 overflow-hidden w-full">
                                             <Label htmlFor={`t-${table.id}`} className="font-semibold cursor-pointer truncate text-base">
@@ -307,6 +371,7 @@ export default function AnalysisConfigPage() {
                                             <p className="text-xs text-gray-500 truncate" title={table.original_filename}>
                                                 元ファイル: {table.original_filename}
                                             </p>
+                                            {/* テーブルの行数・カラム数情報をバッジで表示 */}
                                             <div className="flex gap-2 mt-1">
                                                 <Badge variant="secondary" className="text-xs font-normal">
                                                     {table.row_count.toLocaleString()} 行
@@ -319,12 +384,38 @@ export default function AnalysisConfigPage() {
                                     </div>
                                 ))}
                             </RadioGroup>
+
+                            {/* テーブルが選択されたときに「次へ」ボタンを目立たせる誘導エリア */}
+                            {mainTableId && configName.trim() && (
+                                <div className="mt-2 p-4 bg-primary/5 border border-primary/20 rounded-lg flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-sm text-primary">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        <span>
+                                            <span className="font-semibold">{getTargetTable()?.physical_table_name}</span> を選択しました。次のステップへ進んでください。
+                                        </span>
+                                    </div>
+                                    <Button onClick={handleNext} size="sm" className="gap-1">
+                                        次のステップへ <ChevronRight className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {/* Step 2: Target Column Selection */}
+                    {/* ── Step 2: 目的変数選択 ── */}
                     {step === 2 && getTargetTable() && (
                         <div className="space-y-6">
+                            {/* Step 2 上部：選択済みテーブル名のサマリーバッジ */}
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>選択済み:</span>
+                                <Badge variant="secondary" className="text-xs font-medium">
+                                    {getTargetTable()?.physical_table_name}
+                                </Badge>
+                                <span className="text-xs">
+                                    ({getTargetTable()?.row_count.toLocaleString()} 行 / {getTargetTable()?.columns.length} 列)
+                                </span>
+                            </div>
+
                             <div className="space-y-2">
                                 <Label className="text-lg">予測対象（目的変数）を選択</Label>
                                 <p className="text-sm text-gray-500">
@@ -415,9 +506,30 @@ export default function AnalysisConfigPage() {
                         </div>
                     )}
 
-                    {/* Step 3: Feature Suggestions */}
+                    {/* ── Step 3: 特徴量選択 ── */}
                     {step === 3 && (
                         <div className="space-y-6">
+                            {/* Step 3 上部：選択済みテーブル・目的変数・タスクのサマリーバッジ */}
+                            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                <span>テーブル:</span>
+                                <Badge variant="secondary" className="text-xs font-medium">
+                                    {getTargetTable()?.physical_table_name}
+                                </Badge>
+                                <span>/</span>
+                                <span>目的変数:</span>
+                                <Badge variant="secondary" className="text-xs font-medium">
+                                    {getTargetColumn()?.physical_name ?? targetColumnId}
+                                </Badge>
+                                <span>/</span>
+                                <span>タスク:</span>
+                                <Badge
+                                    variant="outline"
+                                    className={`text-xs font-medium ${taskType === 'regression' ? 'bg-primary/10 text-primary border-primary/30' : 'bg-secondary text-secondary-foreground'}`}
+                                >
+                                    {taskType === 'regression' ? '回帰' : '分類'}
+                                </Badge>
+                            </div>
+
                             <div className="space-y-2">
                                 <Label className="text-lg">特徴量エンジニアリング（自動提案）</Label>
                                 <p className="text-sm text-gray-500">
@@ -436,18 +548,44 @@ export default function AnalysisConfigPage() {
                                 </div>
                             ) : (
                                 <div className="border rounded-lg overflow-hidden">
-                                    <div className="flex items-center justify-between p-3 bg-secondary/30 border-b">
-                                        <span className="text-sm font-medium">{suggestions.length} 個の提案</span>
-                                        <Button variant="ghost" size="sm" onClick={() => setSelectedFeatureIndices(suggestions.map((_, i) => i))} className="text-xs h-8">
-                                            すべて選択
-                                        </Button>
-                                        <Button variant="ghost" size="sm" onClick={() => setSelectedFeatureIndices([])} className="text-xs h-8">
-                                            すべて解除
-                                        </Button>
+                                    {/* ヘッダー：選択件数表示 + 全選択・全解除ボタン */}
+                                    <div className="flex items-center justify-between p-3 bg-secondary/30 border-b gap-3">
+                                        {/* 選択中件数のバッジ表示 */}
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-medium text-muted-foreground">{suggestions.length} 個の提案</span>
+                                            <Badge
+                                                variant={selectedFeatureIndices.length > 0 ? "default" : "secondary"}
+                                                className="text-xs"
+                                            >
+                                                {selectedFeatureIndices.length} 件選択中
+                                            </Badge>
+                                        </div>
+                                        {/* 全選択・全解除ボタン（デザイン改善版） */}
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSelectedFeatureIndices(suggestions.map((_, i) => i))}
+                                                className="text-xs h-7 px-3 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                            >
+                                                全選択
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSelectedFeatureIndices([])}
+                                                className="text-xs h-7 px-3 text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40"
+                                            >
+                                                全解除
+                                            </Button>
+                                        </div>
                                     </div>
                                     <div className="divide-y max-h-[400px] overflow-y-auto">
                                         {suggestions.map((sug, idx) => (
-                                            <div key={idx} className="p-4 flex items-start gap-4 hover:bg-secondary/10">
+                                            <div
+                                                key={idx}
+                                                className={`p-4 flex items-start gap-4 transition-colors ${selectedFeatureIndices.includes(idx) ? 'hover:bg-primary/5' : 'hover:bg-secondary/10 opacity-60'}`}
+                                            >
                                                 <Checkbox
                                                     id={`sug-${idx}`}
                                                     checked={selectedFeatureIndices.includes(idx)}
@@ -480,8 +618,8 @@ export default function AnalysisConfigPage() {
                     </Button>
 
                     {step < 3 ? (
-                        <Button onClick={handleNext}>
-                            次へ <ChevronRight className="w-4 h-4 ml-2" />
+                        <Button onClick={handleNext} size="default" className="gap-1">
+                            次へ <ChevronRight className="w-4 h-4" />
                         </Button>
                     ) : (
                         <Button onClick={handleSave} className="bg-primary hover:opacity-90 text-primary-foreground">
