@@ -30,7 +30,7 @@ def read_root():
     return {"message": "Welcome to wel-analyzer API"}
 
 # ルーターの追加
-from app.api.endpoints import projects, upload, tables, relations, analysis, train, auth
+from app.api.endpoints import projects, upload, tables, relations, analysis, train, auth, predict
 
 # 認証ルーター
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
@@ -43,3 +43,4 @@ app.include_router(tables.router, prefix="/api/projects/{project_id}/tables", ta
 app.include_router(relations.router, prefix="/api/projects/{project_id}/relations", tags=["relations"])
 app.include_router(analysis.router, prefix="/api/projects/{project_id}/analysis", tags=["analysis"])
 app.include_router(train.router, prefix="/api/projects/{project_id}/train", tags=["train"])
+app.include_router(predict.router, prefix="/api/projects/{project_id}/predict", tags=["predict"])

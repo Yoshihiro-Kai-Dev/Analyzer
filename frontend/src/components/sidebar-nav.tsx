@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Database, GitMerge, Settings2, LayoutDashboard } from 'lucide-react';
+import { Database, GitMerge, Settings2, LayoutDashboard, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ナビゲーション項目の定義
@@ -31,6 +31,12 @@ const navItems = (projectId: string) => [
         name: 'ダッシュボード',
         href: `/projects/${projectId}/dashboard`,
         icon: LayoutDashboard,
+    },
+    {
+        step: 5,
+        name: '予測',
+        href: `/projects/${projectId}/predict`,
+        icon: Sparkles,
     },
 ];
 

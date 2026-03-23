@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, JSON, Float, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import uuid
 from app.db.session import Base
 
 class User(Base):
@@ -131,6 +132,7 @@ class AnalysisConfig(Base):
     
     # 削除ルール: Config削除でJobも削除
     jobs = relationship("TrainJob", back_populates="config", cascade="all, delete-orphan")
+    prediction_jobs = relationship("PredictionJob", back_populates="config", cascade="all, delete-orphan")
 
 
 class TrainJob(Base):
@@ -221,3 +223,21 @@ class TrainResult(Base):
     
     job = relationship("TrainJob", back_populates="result")
 
+
+class PredictionJob(Base):
+    """
+    予測ジョブの管理
+    学習済みモデルを使った新規データへの予測処理を追跡する
+    """
+    __tablename__ = "prediction_jobs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    config_id = Column(Integer, ForeignKey("analysis_configs.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String, default="pending")  # pending/running/completed/failed
+    input_table_name = Column(String, nullable=True)  # 予測用一時テーブル名
+    result_path = Column(String, nullable=True)  # 結果CSVの保存パス
+    row_count = Column(Integer, nullable=True)
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    config = relationship("AnalysisConfig", back_populates="prediction_jobs")
