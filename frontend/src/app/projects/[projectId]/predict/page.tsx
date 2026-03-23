@@ -9,13 +9,20 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, Download, Play, CheckCircle2, XCircle, Loader2 } from "lucide-react"
 
-// 分析設定の型定義
+// 特徴量設定の詳細
+interface FeatureDetail {
+  description: string
+}
+
+// 分析設定の型定義（APIレスポンスに合わせた形）
 interface AnalysisConfig {
   id: number
   name: string
-  target_column: string
+  target_column_id: number
   task_type: string
-  feature_columns: string[]
+  feature_settings: {
+    details?: FeatureDetail[]
+  } | null
 }
 
 // 学習ジョブの型定義
@@ -192,13 +199,12 @@ export default function PredictPage() {
                 >
                   <div className="font-medium text-sm text-gray-900">{config.name}</div>
                   <div className="text-xs text-gray-500 mt-1">
-                    目的変数: {config.target_column}
-                    <Badge variant="outline" className="ml-2 text-xs">
+                    <Badge variant="outline" className="text-xs">
                       {config.task_type === "regression" ? "回帰" : "分類"}
                     </Badge>
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">
-                    特徴量: {config.feature_columns.length}件
+                    特徴量: {config.feature_settings?.details?.length ?? 0}件
                   </div>
                 </button>
               ))}
@@ -218,7 +224,7 @@ export default function PredictPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-gray-500">
-              学習時に使用した特徴量カラム（{selectedConfig?.feature_columns.join(", ")}）を含むCSVファイルをアップロードしてください。
+              学習時に使用した特徴量（{selectedConfig?.feature_settings?.details?.length ?? 0}件）を含むCSVファイルをアップロードしてください。
             </p>
             {/* ドロップゾーン */}
             <div
