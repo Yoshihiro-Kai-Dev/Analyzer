@@ -24,6 +24,9 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# ワークツリー
+.worktrees/
+
 # その他
 *.pdf
 *.txt
