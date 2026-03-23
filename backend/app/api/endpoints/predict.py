@@ -21,8 +21,8 @@ router = APIRouter()
 def run_prediction(
     project_id: int,
     config_id: int,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
     _member: models.ProjectMember = Depends(get_project_member),
