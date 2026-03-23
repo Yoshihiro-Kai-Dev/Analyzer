@@ -133,6 +133,22 @@ class TrainJob(Base):
     result = relationship("TrainResult", uselist=False, back_populates="job", cascade="all, delete-orphan")
 
 
+class UploadTask(Base):
+    """
+    CSVアップロードタスクの進捗管理
+    サーバー再起動後もタスク状態を復元できるようDBで永続管理する
+    """
+    __tablename__ = "upload_tasks"
+
+    id = Column(String, primary_key=True, comment="UUID形式のタスクID")
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    status = Column(String, default="processing", comment="processing, completed, failed")
+    progress = Column(Integer, default=0, comment="進捗（0-100）")
+    message = Column(String, nullable=True, comment="進捗メッセージ")
+    result = Column(JSON, nullable=True, comment="完了時の結果データ")
+    created_at = Column(DateTime, default=datetime.now)
+
+
 class TrainResult(Base):
     """
     学習結果（評価指標、特徴量重要度）
