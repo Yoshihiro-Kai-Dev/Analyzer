@@ -7,12 +7,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, Circle, ChevronRight, AlertCircle, Save } from 'lucide-react';
+import { CheckCircle2, ChevronRight, AlertCircle, Save, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
 import { useAppAlert } from '@/hooks/use-app-alert';
 import { useParams } from 'next/navigation';
@@ -28,6 +35,14 @@ export default function AnalysisConfigPage() {
     const [tables, setTables] = useState<any[]>([]);
     const [suggestions, setSuggestions] = useState<any[]>([]);
 
+    // 既存の分析設定一覧
+    const [configs, setConfigs] = useState<any[]>([]);
+    const [loadingConfigs, setLoadingConfigs] = useState(false);
+
+    // 削除確認ダイアログの状態
+    const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
     // Selections
     const [configName, setConfigName] = useState<string>("");
     const [mainTableId, setMainTableId] = useState<string>("");
@@ -41,6 +56,19 @@ export default function AnalysisConfigPage() {
     const [validationError, setValidationError] = useState<string | null>(null);
     const { alertState, showAlert, closeAlert } = useAppAlert();
 
+    // 既存の分析設定一覧を取得する関数
+    const fetchConfigs = async () => {
+        setLoadingConfigs(true);
+        try {
+            const res = await apiClient.get(`/api/projects/${projectId}/analysis/configs`);
+            setConfigs(res.data);
+        } catch (error) {
+            console.error("分析設定一覧の取得に失敗しました", error);
+        } finally {
+            setLoadingConfigs(false);
+        }
+    };
+
     useEffect(() => {
         if (!projectId) return;
         const fetchTables = async () => {
@@ -52,6 +80,8 @@ export default function AnalysisConfigPage() {
             }
         };
         fetchTables();
+        // 初回表示時に既存の分析設定一覧も取得
+        fetchConfigs();
     }, [projectId]);
 
     // Step 3に入ったときに提案を取得
@@ -104,6 +134,8 @@ export default function AnalysisConfigPage() {
 
             const response = await apiClient.post(`/api/projects/${projectId}/analysis/config`, payload);
             localStorage.setItem('lastAnalysisConfigId', response.data.id);
+            // 保存成功後は一覧を再取得して最新状態を反映
+            await fetchConfigs();
             showAlert("保存完了", "分析設定を保存しました。");
 
         } catch (error) {
@@ -126,8 +158,96 @@ export default function AnalysisConfigPage() {
         });
     }
 
+    // 削除ボタンクリック時：確認ダイアログを開く
+    const handleDeleteClick = (config: any) => {
+        setDeleteTarget({ id: config.id, name: config.name || `設定 #${config.id}` });
+    };
+
+    // 削除確認後の実際の削除処理
+    const handleDeleteConfirm = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        try {
+            await apiClient.delete(`/api/projects/${projectId}/analysis/config/${deleteTarget.id}`);
+            // 削除後は一覧を再取得して表示を更新
+            await fetchConfigs();
+            setDeleteTarget(null);
+        } catch (error: any) {
+            const msg = error.response?.data?.detail || "分析設定の削除に失敗しました";
+            showAlert("削除エラー", msg);
+            setDeleteTarget(null);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    // タスクタイプの表示名を返す
+    const taskTypeLabel = (t: string) => t === 'classification' ? '分類' : t === 'regression' ? '回帰' : t;
+
+    // モデルタイプの表示名を返す
+    const modelTypeLabel = (m: string) => m === 'gradient_boosting' ? 'LightGBM' : m === 'logistic_regression' ? '線形モデル' : m;
+
     return (
-        <div className="w-full min-h-screen bg-background p-8 flex justify-center items-start">
+        <div className="w-full min-h-screen bg-background p-8 flex flex-col items-center gap-8">
+
+            {/* ── 既存の分析設定一覧セクション ── */}
+            <div className="w-full max-w-4xl">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold text-foreground">保存済みの分析設定</h2>
+                    <Button variant="outline" size="sm" onClick={fetchConfigs} disabled={loadingConfigs}>
+                        {loadingConfigs ? "読み込み中..." : "更新"}
+                    </Button>
+                </div>
+
+                {loadingConfigs ? (
+                    <p className="text-sm text-gray-500">設定を読み込んでいます...</p>
+                ) : configs.length === 0 ? (
+                    <div className="border border-dashed border-border rounded-lg p-6 text-center text-muted-foreground text-sm">
+                        保存済みの分析設定がありません。下のウィザードで設定を作成してください。
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {configs.map((config) => (
+                            <Card key={config.id} className="border border-border">
+                                <CardHeader className="pb-2 flex flex-row items-start justify-between space-y-0">
+                                    <CardTitle className="text-base font-semibold truncate pr-2" title={config.name}>
+                                        {config.name || `設定 #${config.id}`}
+                                    </CardTitle>
+                                    {/* 削除ボタン */}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                                        onClick={() => handleDeleteClick(config)}
+                                        title="この設定を削除"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                </CardHeader>
+                                <CardContent className="space-y-2">
+                                    <div className="flex gap-2 flex-wrap">
+                                        <Badge variant="secondary" className="text-xs font-normal">
+                                            {taskTypeLabel(config.task_type)}
+                                        </Badge>
+                                        <Badge variant="outline" className="text-xs font-normal bg-white">
+                                            {modelTypeLabel(config.model_type)}
+                                        </Badge>
+                                    </div>
+                                    {config.created_at && (
+                                        <p className="text-xs text-gray-400">
+                                            作成日: {new Date(config.created_at).toLocaleDateString('ja-JP')}
+                                        </p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <Separator className="w-full max-w-4xl" />
+
+            {/* ── 分析設定ウィザード ── */}
             <Card className="w-full max-w-4xl">
                 <CardHeader>
                     <CardTitle>分析設定ウィザード</CardTitle>
@@ -371,6 +491,27 @@ export default function AnalysisConfigPage() {
                     )}
                 </CardFooter>
             </Card>
+
+            {/* 分析設定削除確認ダイアログ */}
+            <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>分析設定を削除しますか？</DialogTitle>
+                        <DialogDescription>
+                            「{deleteTarget?.name}」を削除します。<br />
+                            この操作は元に戻せません。
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+                            キャンセル
+                        </Button>
+                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting}>
+                            {deleting ? "削除中..." : "削除する"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {alertState && (
                 <AppAlertDialog
