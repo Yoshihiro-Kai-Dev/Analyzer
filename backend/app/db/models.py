@@ -1,7 +1,24 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, JSON, Float, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import uuid
 from app.db.session import Base
+
+class User(Base):
+    """
+    ユーザー情報
+    """
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, nullable=False, index=True, comment="ユーザー名")
+    hashed_password = Column(String, nullable=False, comment="ハッシュ化されたパスワード")
+    created_at = Column(DateTime, default=datetime.now, comment="作成日時")
+
+    # リレーション
+    owned_projects = relationship("Project", back_populates="owner")
+    memberships = relationship("ProjectMember", back_populates="user", cascade="all, delete-orphan")
+
 
 class Project(Base):
     """
@@ -14,9 +31,15 @@ class Project(Base):
     description = Column(String, nullable=True, comment="プロジェクト概要")
     created_at = Column(DateTime, default=datetime.now)
 
+    # オーナーユーザーID（nullable=Trueで既存データとの互換性を保つ）
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="オーナーユーザーID")
+
     # リレーション
+    owner = relationship("User", back_populates="owned_projects")
+    members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     tables = relationship("TableMetadata", back_populates="project", cascade="all, delete-orphan")
     analysis_configs = relationship("AnalysisConfig", back_populates="project", cascade="all, delete-orphan")
+    upload_tasks = relationship("UploadTask", cascade="all, delete-orphan")
 
 
 class TableMetadata(Base):
@@ -110,6 +133,7 @@ class AnalysisConfig(Base):
     
     # 削除ルール: Config削除でJobも削除
     jobs = relationship("TrainJob", back_populates="config", cascade="all, delete-orphan")
+    prediction_jobs = relationship("PredictionJob", back_populates="config", cascade="all, delete-orphan")
 
 
 class TrainJob(Base):
@@ -131,6 +155,39 @@ class TrainJob(Base):
     
     config = relationship("AnalysisConfig", back_populates="jobs")
     result = relationship("TrainResult", uselist=False, back_populates="job", cascade="all, delete-orphan")
+
+
+class ProjectMember(Base):
+    """
+    プロジェクトメンバーの管理（オーナー・編集者・閲覧者）
+    """
+    __tablename__ = "project_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True, comment="所属プロジェクトID")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True, comment="メンバーのユーザーID")
+    # ロール: owner（オーナー）, editor（編集者）, viewer（閲覧者）
+    role = Column(String, nullable=False, default="viewer", comment="owner, editor, viewer")
+
+    # リレーション
+    project = relationship("Project", back_populates="members")
+    user = relationship("User", back_populates="memberships")
+
+
+class UploadTask(Base):
+    """
+    CSVアップロードタスクの進捗管理
+    サーバー再起動後もタスク状態を復元できるようDBで永続管理する
+    """
+    __tablename__ = "upload_tasks"
+
+    id = Column(String, primary_key=True, comment="UUID形式のタスクID")
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String, default="processing", comment="processing, completed, failed")
+    progress = Column(Integer, default=0, comment="進捗（0-100）")
+    message = Column(String, nullable=True, comment="進捗メッセージ")
+    result = Column(JSON, nullable=True, comment="完了時の結果データ")
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class TrainResult(Base):
@@ -167,3 +224,21 @@ class TrainResult(Base):
     
     job = relationship("TrainJob", back_populates="result")
 
+
+class PredictionJob(Base):
+    """
+    予測ジョブの管理
+    学習済みモデルを使った新規データへの予測処理を追跡する
+    """
+    __tablename__ = "prediction_jobs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    config_id = Column(Integer, ForeignKey("analysis_configs.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String, default="pending")  # pending/running/completed/failed
+    input_table_name = Column(String, nullable=True)  # 予測用一時テーブル名
+    result_path = Column(String, nullable=True)  # 結果CSVの保存パス
+    row_count = Column(Integer, nullable=True)
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    config = relationship("AnalysisConfig", back_populates="prediction_jobs")

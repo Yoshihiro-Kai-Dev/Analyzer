@@ -1,16 +1,15 @@
 "use client"
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Play, Loader2, TrendingUp, BarChart2, Sparkles, HelpCircle, GitBranch, ListTree, Table2 } from 'lucide-react';
+import { Play, Loader2, TrendingUp, BarChart2, Sparkles, HelpCircle, GitBranch, ListTree, Table2, XCircle, History, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import ReactFlow, {
     Background,
     Controls,
@@ -29,7 +28,7 @@ import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
 import { useAppAlert } from '@/hooks/use-app-alert';
-import { API_BASE_URL } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 
 // physical table name prefix を除去する（例: upload_p5_20260304161857_01_ → 削除）
 const stripTablePrefix = (name: string) =>
@@ -148,23 +147,90 @@ function stabilityLabel(std: number, prediction: number): string {
     return '低';
 }
 
+// ── 指標の詳細説明（ツールチップ用）────────────────────────────
+const METRIC_DETAILS: Record<string, { label: string; gradient: string; description: string }> = {
+    rmse: {
+        label: 'RMSE',
+        gradient: 'from-blue-500 to-blue-400',
+        description: '二乗平均平方根誤差（Root Mean Squared Error）。予測値と実測値の差を二乗して平均し、その平方根を取ります。0に近いほど予測精度が高く、外れ値の影響を受けやすい特性があります。単位は目的変数と同じです。',
+    },
+    r2: {
+        label: 'R²',
+        gradient: 'from-indigo-500 to-indigo-400',
+        description: '決定係数（R-squared）。モデルがデータの変動をどれだけ説明できているかを示します。1.0が完全な予測、0.0がランダムと同等、負の値は予測が平均値より悪いことを意味します。回帰モデルの総合評価に使われます。',
+    },
+    accuracy: {
+        label: 'Accuracy',
+        gradient: 'from-emerald-500 to-emerald-400',
+        description: '正解率（Accuracy）。全データ件数のうち正しく分類できた割合です。0〜1の範囲で1に近いほど良好です。クラスの偏りが大きいデータセットでは過大評価されやすいため、AUCと合わせて確認することを推奨します。',
+    },
+    auc: {
+        label: 'AUC',
+        gradient: 'from-purple-500 to-purple-400',
+        description: 'ROC曲線下面積（Area Under the Curve）。分類モデルが正例と負例をどれだけ区別できるかを示します。1.0が完全な識別、0.5がランダムと同等です。クラス不均衡に強く、閾値非依存な評価指標として広く使われます。',
+    },
+};
+
+// 指標のグラデーション背景クラスを取得する（未登録はデフォルト値を返す）
+function getMetricGradient(key: string): string {
+    return METRIC_DETAILS[key.toLowerCase()]?.gradient ?? 'from-gray-500 to-gray-400';
+}
+
+// 指標の詳細説明テキストを取得する
+function getMetricDetailDescription(key: string): string {
+    return METRIC_DETAILS[key.toLowerCase()]?.description ?? '評価指標';
+}
+
+// ── 特徴量重要度グラフのグラデーション色計算（青→水色）────────
+function getFeatureImportanceColor(index: number, total: number): string {
+    // インデックスに応じて青(#3b82f6)から水色(#67e8f9)へグラデーション
+    const ratio = total <= 1 ? 0 : index / (total - 1);
+    // RGB補間: blue(59,130,246) → cyan(103,232,249)
+    const r = Math.round(59  + (103 - 59)  * ratio);
+    const g = Math.round(130 + (232 - 130) * ratio);
+    const b = Math.round(246 + (249 - 246) * ratio);
+    return `rgb(${r},${g},${b})`;
+}
+
+// ── 学習ジョブの型定義 ────────────────────────────────────────
+interface TrainJob {
+    id: number;
+    status: string;
+    message?: string;
+    progress?: number;
+    error_message?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export default function DashboardPage() {
     const params = useParams();
     const projectId = params.projectId as string;
     const [config, setConfig] = useState<any>(null);
-    const [job, setJob] = useState<any>(null);
+    const [job, setJob] = useState<TrainJob | null>(null);
     const [result, setResult] = useState<any>(null);
     const [configId, setConfigId] = useState<string>("");
     const [configs, setConfigs] = useState<any[]>([]);
+    // ポーリング中エラーをUI上に表示するための状態
+    const [pollingError, setPollingError] = useState<string | null>(null);
+    // キャンセル処理中フラグ
+    const [cancelling, setCancelling] = useState(false);
     const pollingRef = useRef<NodeJS.Timeout | null>(null);
     const { alertState, showAlert, closeAlert } = useAppAlert();
+
+    // 過去の学習ジョブ一覧（completedのみ）
+    const [pastJobs, setPastJobs] = useState<TrainJob[]>([]);
+    // 過去ジョブ読み込み中フラグ
+    const [loadingPastJobs, setLoadingPastJobs] = useState(false);
+    // 過去ジョブから選択した jobId（nullのとき最新結果を表示）
+    const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
 
     // 決定木 ReactFlow state
     const [dtNodes, setDtNodes, onDtNodesChange] = useNodesState([]);
     const [dtEdges, setDtEdges, onDtEdgesChange] = useEdgesState([]);
 
     useEffect(() => {
-        axios.get(`${API_BASE_URL}/api/projects/${projectId}/analysis/configs`)
+        apiClient.get(`/api/projects/${projectId}/analysis/configs`)
             .then(res => {
                 setConfigs(res.data);
                 const lastId = localStorage.getItem('lastAnalysisConfigId');
@@ -177,16 +243,50 @@ export default function DashboardPage() {
             .catch(() => {});
     }, [projectId]);
 
+    // configId が変わったら過去ジョブ一覧を再取得する
+    useEffect(() => {
+        if (!configId) {
+            setPastJobs([]);
+            return;
+        }
+        fetchPastJobs(configId);
+    }, [configId, projectId]);
+
+    // 指定した configId に紐づく完了済みジョブ一覧を取得する
+    const fetchPastJobs = async (cid: string) => {
+        setLoadingPastJobs(true);
+        try {
+            // config ごとのジョブ一覧を取得するエンドポイント
+            const res = await apiClient.get(`/api/projects/${projectId}/train/jobs`, {
+                params: { config_id: cid },
+            });
+            // completedのジョブのみ絞り込み、新しい順に並べる
+            const completed = (res.data as TrainJob[])
+                .filter(j => j.status === 'completed')
+                .sort((a, b) => (b.id ?? 0) - (a.id ?? 0));
+            setPastJobs(completed);
+        } catch {
+            // エンドポイントが未実装またはエラーの場合は空リストとして扱う
+            setPastJobs([]);
+        } finally {
+            setLoadingPastJobs(false);
+        }
+    };
+
     const startTraining = async () => {
         if (!configId) {
             showAlert("設定が未選択", "分析設定を選択してください。");
             return;
         }
 
+        // 学習開始時にポーリングエラーと選択ジョブをリセット
+        setPollingError(null);
+        setSelectedJobId(null);
+
         try {
-            const response = await axios.post(`${API_BASE_URL}/api/projects/${projectId}/train/run/${configId}`);
+            const response = await apiClient.post(`/api/projects/${projectId}/train/run/${configId}`);
             setJob(response.data);
-            setResult(null); // Reset result
+            setResult(null); // 結果をリセット
             startPolling(response.data.id);
         } catch (error: any) {
             console.error("Start training failed", error);
@@ -195,29 +295,54 @@ export default function DashboardPage() {
         }
     };
 
+    // 学習をキャンセルする
+    const cancelTraining = async () => {
+        if (!job) return;
+        setCancelling(true);
+        try {
+            await apiClient.post(`/api/projects/${projectId}/train/cancel/${job.id}`);
+            // キャンセル成功後はポーリングを停止してUIをリセット
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setJob(null);
+            setPollingError(null);
+        } catch (error: any) {
+            console.error("Cancel training failed", error);
+            const msg = error.response?.data?.detail || error.message || "キャンセルに失敗しました";
+            showAlert("キャンセルエラー", msg);
+        } finally {
+            setCancelling(false);
+        }
+    };
+
     const startPolling = (jobId: number) => {
         if (pollingRef.current) clearInterval(pollingRef.current);
 
         pollingRef.current = setInterval(async () => {
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/train/status/${jobId}`);
+                const res = await apiClient.get(`/api/projects/${projectId}/train/status/${jobId}`);
                 setJob(res.data);
 
                 if (res.data.status === "completed") {
                     clearInterval(pollingRef.current!);
                     fetchResult(jobId);
+                    // 完了後に過去ジョブ一覧を更新する
+                    fetchPastJobs(configId);
                 } else if (res.data.status === "failed") {
                     clearInterval(pollingRef.current!);
                 }
-            } catch (err) {
+            } catch (err: any) {
+                // ポーリングエラーはコンソールに加えて状態変数にも設定してUIに表示する
                 console.error("Polling error", err);
+                const msg = err?.response?.data?.detail || err?.message || "ステータス確認中にエラーが発生しました";
+                setPollingError(msg);
+                clearInterval(pollingRef.current!);
             }
         }, 1000);
     };
 
     const fetchResult = async (jobId: number) => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/train/result/${jobId}`);
+            const res = await apiClient.get(`/api/projects/${projectId}/train/result/${jobId}`);
             setResult(res.data);
 
             // 決定木の可視化データを生成
@@ -234,6 +359,13 @@ export default function DashboardPage() {
         }
     };
 
+    // 過去ジョブを選択して結果を表示する
+    const handleSelectPastJob = (jobId: number) => {
+        setSelectedJobId(jobId);
+        // 実行中の学習があればポーリングを停止せずに結果だけ切り替える
+        fetchResult(jobId);
+    };
+
     // Cleanup
     useEffect(() => {
         return () => {
@@ -241,14 +373,12 @@ export default function DashboardPage() {
         };
     }, []);
 
-    const getMetricDescription = (key: string) => {
-        const k = key.toLowerCase();
-        if (k === 'rmse') return "二乗平均平方根誤差。予測値と実測値の差を表し、0に近いほど精度が良い指標です。";
-        if (k === 'r2') return "決定係数。モデルがデータの変動をどれだけ説明できているかを表し、1に近いほど精度が良い指標です。";
-        if (k === 'accuracy') return "正解率。全データのうち正しく分類できた割合を表し、1に近いほど精度が良い指標です。";
-        if (k === 'auc') return "ROC曲線の下側の面積。ランダムな予測よりどれだけ優れているかを表し、1に近いほど性能が良い指標です。を";
-        return "評価指標";
-    };
+    // 特徴量重要度グラフの高さをデータ件数に応じて動的に計算する（件数×28px、最小300px）
+    const featureImportanceChartHeight = useMemo(() => {
+        if (!result?.feature_importance) return 300;
+        const count = Math.min(result.feature_importance.length, 20);
+        return Math.max(count * 28, 300);
+    }, [result?.feature_importance]);
 
     return (
         <div className="w-full min-h-screen bg-background p-8 space-y-8">
@@ -269,12 +399,103 @@ export default function DashboardPage() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button onClick={startTraining} disabled={!configId || (job && job.status === "running")} className="bg-primary hover:opacity-90 text-primary-foreground">
-                        {job && job.status === "running" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                    <Button onClick={startTraining} disabled={!configId || (job !== null && (job.status === "running" || job.status === "pending"))} className="bg-primary hover:opacity-90 text-primary-foreground">
+                        {job !== null && (job.status === "running" || job.status === "pending") ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
                         学習実行
                     </Button>
+                    {/* 学習中・待機中のときのみキャンセルボタンを表示 */}
+                    {job !== null && (job.status === "running" || job.status === "pending") && (
+                        <Button
+                            variant="outline"
+                            onClick={cancelTraining}
+                            disabled={cancelling}
+                            className="border-destructive text-destructive hover:bg-destructive/10"
+                        >
+                            {cancelling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XCircle className="w-4 h-4 mr-2" />}
+                            {cancelling ? "キャンセル中..." : "キャンセル"}
+                        </Button>
+                    )}
                 </div>
             </div>
+
+            {/* ポーリングエラー表示 */}
+            {pollingError && (
+                <Alert variant="destructive">
+                    <AlertTitle>ステータス取得エラー</AlertTitle>
+                    <AlertDescription>
+                        {pollingError}
+                        <Button
+                            variant="link"
+                            size="sm"
+                            className="ml-2 p-0 h-auto text-destructive underline"
+                            onClick={() => setPollingError(null)}
+                        >
+                            閉じる
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            {/* ── 過去の学習結果セクション ─────────────────────────────── */}
+            {configId && (
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <History className="w-4 h-4 text-muted-foreground" />
+                            過去の学習結果
+                        </CardTitle>
+                        <CardDescription>
+                            選択中の設定で完了した学習ジョブ一覧。クリックして結果を切り替えられます。
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {loadingPastJobs ? (
+                            // ジョブ一覧読み込み中のスピナー
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                読み込み中...
+                            </div>
+                        ) : pastJobs.length === 0 ? (
+                            // 完了済みジョブが存在しない場合のメッセージ
+                            <p className="text-sm text-muted-foreground py-2">
+                                この設定の完了済み学習ジョブはまだありません。「学習実行」ボタンで学習を開始してください。
+                            </p>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {pastJobs.map((j) => {
+                                    // 選択中かどうかを判定（selectedJobId がない場合は最新ジョブを選択中扱い）
+                                    const isSelected =
+                                        selectedJobId != null
+                                            ? j.id === selectedJobId
+                                            : j.id === pastJobs[0]?.id && result != null;
+                                    return (
+                                        <button
+                                            key={j.id}
+                                            onClick={() => handleSelectPastJob(j.id)}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-colors
+                                                ${isSelected
+                                                    ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                                                    : 'bg-white border-border text-foreground hover:bg-secondary/60'
+                                                }`}
+                                        >
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                            Job #{j.id}
+                                            {j.created_at && (
+                                                <span className={`text-xs ${isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                                    {new Date(j.created_at).toLocaleString('ja-JP', {
+                                                        month: '2-digit', day: '2-digit',
+                                                        hour: '2-digit', minute: '2-digit',
+                                                    })}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Status Card */}
             {job && (
@@ -322,7 +543,7 @@ export default function DashboardPage() {
                         </div>
                     )}
 
-                    {/* Metrics */}
+                    {/* ── 評価指標カード（グラデーション背景） ──────────────── */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -343,55 +564,79 @@ export default function DashboardPage() {
                         <CardContent>
                             <div className="grid grid-cols-2 gap-4">
                                 <TooltipProvider>
-                                    {Object.entries(result.metrics).map(([key, value]: [string, any]) => (
-                                        <Tooltip key={key}>
-                                            <TooltipTrigger asChild>
-                                                <div className="bg-secondary/50 p-4 rounded-lg text-center cursor-help transition-colors hover:bg-secondary">
-                                                    <div className="text-xs text-muted-foreground uppercase font-semibold flex items-center justify-center gap-1">
-                                                        {key} <HelpCircle className="w-3 h-3" />
+                                    {Object.entries(result.metrics).map(([key, value]: [string, any]) => {
+                                        const gradient = getMetricGradient(key);
+                                        const detail = getMetricDetailDescription(key);
+                                        return (
+                                            <Tooltip key={key}>
+                                                <TooltipTrigger asChild>
+                                                    {/* グラデーション背景カード */}
+                                                    <div className={`bg-gradient-to-br ${gradient} p-4 rounded-xl text-center cursor-help transition-opacity hover:opacity-90 shadow-sm`}>
+                                                        <div className="text-xs text-white/80 uppercase font-semibold flex items-center justify-center gap-1 mb-1">
+                                                            {key} <HelpCircle className="w-3 h-3" />
+                                                        </div>
+                                                        {/* 数値を大きく強調 */}
+                                                        <div className="text-3xl font-bold text-white drop-shadow">
+                                                            {typeof value === 'number' ? value.toFixed(4) : value}
+                                                        </div>
                                                     </div>
-                                                    <div className="text-2xl font-bold text-primary">{typeof value === 'number' ? value.toFixed(4) : value}</div>
-                                                </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>{getMetricDescription(key)}</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    ))}
+                                                </TooltipTrigger>
+                                                <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                                                    <p>{detail}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        );
+                                    })}
                                 </TooltipProvider>
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* Feature Importance */}
+                    {/* ── 特徴量重要度グラフ（上位20件・グラデーション・動的高さ） ─ */}
                     <Card className="col-span-1 md:col-span-2 lg:col-span-1">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <BarChart2 className="w-5 h-5" /> 重要特徴量
                             </CardTitle>
-                            <CardDescription>モデルの予測に寄与した上位の特徴量</CardDescription>
+                            <CardDescription>モデルの予測に寄与した上位20件の特徴量</CardDescription>
                         </CardHeader>
-                        <CardContent className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
+                        {/* グラフ高さはデータ件数×28px（最小300px）で動的に変わる */}
+                        <CardContent style={{ height: featureImportanceChartHeight + 40 }}>
+                            <ResponsiveContainer width="100%" height={featureImportanceChartHeight}>
                                 <BarChart
-                                    data={result.feature_importance.slice(0, 10).map((item: any) => ({
+                                    data={result.feature_importance.slice(0, 20).map((item: any) => ({
                                         ...item,
                                         feature: stripTablePrefix(item.feature)
                                     }))}
                                     layout="vertical"
-                                    margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                                    margin={{ top: 5, right: 80, left: 40, bottom: 5 }}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                                     <XAxis type="number" />
                                     <YAxis type="category" dataKey="feature" width={150} tick={{ fontSize: 11 }} />
+                                    {/* バーホバー時のツールチップ */}
                                     <RechartsTooltip
-                                        formatter={(value: any) => typeof value === 'number' ? value.toFixed(2) : value}
+                                        formatter={(value: any) => [
+                                            typeof value === 'number' ? value.toFixed(4) : value,
+                                            '重要度'
+                                        ]}
                                         contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}
                                     />
-                                    <Bar dataKey="importance" fill="var(--color-primary)" radius={[0, 4, 4, 0]}>
-                                        {result.feature_importance.slice(0, 10).map((entry: any, index: number) => (
-                                            <Cell key={`cell-${index}`} fill={index < 3 ? 'var(--color-primary)' : 'var(--color-primary)'} opacity={index < 3 ? 1 : 0.6} />
+                                    <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
+                                        {/* 青→水色のグラデーション色をインデックスに応じて設定 */}
+                                        {result.feature_importance.slice(0, 20).map((_entry: any, index: number) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={getFeatureImportanceColor(index, Math.min(result.feature_importance.length, 20))}
+                                            />
                                         ))}
+                                        {/* バーの右端に重要度の数値を表示 */}
+                                        <LabelList
+                                            dataKey="importance"
+                                            position="right"
+                                            formatter={(v: unknown) => typeof v === 'number' ? v.toFixed(3) : String(v)}
+                                            style={{ fontSize: 10, fill: '#64748b' }}
+                                        />
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
@@ -580,4 +825,3 @@ export default function DashboardPage() {
         </div>
     );
 }
-

@@ -13,14 +13,22 @@ import ReactFlow, {
     Node,
     MarkerType,
     OnConnect,
+    EdgeMouseHandler,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { TableNode } from '@/components/relation-editor/TableNode';
 import { JoinConfigDialog, JoinConfig } from '@/components/relation-editor/JoinConfigDialog';
 import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
 import { useAppAlert } from '@/hooks/use-app-alert';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import dagre from 'dagre';
 
 const nodeTypes = {
@@ -62,7 +70,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 
 
 import { useParams } from 'next/navigation';
-import { API_BASE_URL } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 
 export default function RelationsPage() {
     const params = useParams();
@@ -72,16 +80,24 @@ export default function RelationsPage() {
     const [loading, setLoading] = useState(true);
     const { alertState, showAlert, closeAlert } = useAppAlert();
 
-    // Dialog State
+    // Dialog State（新規リレーション作成用）
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
+
+    // リレーション削除確認ダイアログの状態
+    const [deleteEdgeTarget, setDeleteEdgeTarget] = useState<{
+        edgeId: string;
+        relationId: number;
+        label: string;
+    } | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const [tablesRes, relationsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/projects/${projectId}/tables`),
-                axios.get(`${API_BASE_URL}/api/projects/${projectId}/relations`)
+                apiClient.get(`/api/projects/${projectId}/tables`),
+                apiClient.get(`/api/projects/${projectId}/relations`)
             ]);
 
             const tables = tablesRes.data;
@@ -100,7 +116,7 @@ export default function RelationsPage() {
                 },
             }));
 
-            // Edges
+            // Edges（エッジのdataにrelation.idを持たせて削除時に利用する）
             const initialEdges: Edge[] = relations.map((rel: any) => ({
                 id: `e${rel.parent_table_id}-${rel.child_table_id}`,
                 source: rel.parent_table_id.toString(),
@@ -112,7 +128,8 @@ export default function RelationsPage() {
                 animated: false,
                 style: { stroke: 'var(--color-foreground)', strokeWidth: 2 },
                 markerEnd: { type: MarkerType.ArrowClosed },
-                data: { join_keys: rel.join_keys }
+                // relation.id を data に保持して削除時に参照できるようにする
+                data: { join_keys: rel.join_keys, relation_id: rel.id }
             }));
 
             // Auto Layout
@@ -161,6 +178,36 @@ export default function RelationsPage() {
 
     }, []);
 
+    // エッジクリック時：削除確認ダイアログを開く
+    const onEdgeClick: EdgeMouseHandler = useCallback((event, edge) => {
+        // クリックされたエッジからrelation_idを取得
+        const relationId = edge.data?.relation_id;
+        if (!relationId) {
+            showAlert("エラー", "リレーションIDが取得できませんでした。");
+            return;
+        }
+        const label = typeof edge.label === 'string' ? edge.label : `${edge.source} → ${edge.target}`;
+        setDeleteEdgeTarget({ edgeId: edge.id, relationId, label });
+    }, [showAlert]);
+
+    // リレーション削除の確認後処理
+    const handleDeleteRelationConfirm = async () => {
+        if (!deleteEdgeTarget) return;
+        setDeleting(true);
+        try {
+            await apiClient.delete(`/api/projects/${projectId}/relations/${deleteEdgeTarget.relationId}`);
+            // 削除成功後はリレーション一覧を再取得
+            await fetchData();
+            setDeleteEdgeTarget(null);
+        } catch (error: any) {
+            const msg = error.response?.data?.detail || "リレーションの削除に失敗しました";
+            showAlert("削除エラー", msg);
+            setDeleteEdgeTarget(null);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     const handleSaveRelation = async (config: JoinConfig) => {
         if (!pendingConnection) return;
 
@@ -176,19 +223,22 @@ export default function RelationsPage() {
                 cardinality: config.cardinality
             };
 
-            await axios.post(`${API_BASE_URL}/api/projects/${projectId}/relations`, payload);
+            const response = await apiClient.post(`/api/projects/${projectId}/relations`, payload);
 
-            // エッジを追加
+            // エッジを追加（APIレスポンスのIDをdataに保持する）
             const newEdge: Edge = {
                 id: `e${payload.parent_table_id}-${payload.child_table_id}`,
                 source: pendingConnection.source!,
                 target: pendingConnection.target!,
+                sourceHandle: `source-${config.parentColumn}`,
+                targetHandle: `target-${config.childColumn}`,
                 label: config.cardinality === 'OneToMany' ? '1:N' : '1:1',
                 type: 'smoothstep',
                 animated: true, // 新規追加分はアニメーションで強調
                 style: { stroke: 'var(--color-primary)', strokeWidth: 2 },
                 markerEnd: { type: MarkerType.ArrowClosed },
-                data: { join_keys: payload.join_keys }
+                // 削除時に使えるようAPIから返ったrelation.idをdataに保存
+                data: { join_keys: payload.join_keys, relation_id: response.data.id }
             };
 
             setEdges((eds) => addEdge(newEdge, eds));
@@ -219,7 +269,7 @@ export default function RelationsPage() {
             <header className="p-4 border-b bg-background flex justify-between items-center shadow-sm z-10">
                 <div className="flex flex-col">
                     <h1 className="text-xl font-bold text-foreground">リレーション定義 (ER図)</h1>
-                    <p className="text-xs text-gray-500">テーブルのコネクタをドラッグ＆ドロップして結合を定義します。</p>
+                    <p className="text-xs text-gray-500">テーブルのコネクタをドラッグ＆ドロップして結合を定義します。エッジをクリックすると削除できます。</p>
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={fetchData} title="最新のテーブル情報を取得して配置をリセットします">
@@ -243,6 +293,7 @@ export default function RelationsPage() {
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
+                        onEdgeClick={onEdgeClick}
                         nodeTypes={nodeTypes}
                         fitView
                         className="bg-background"
@@ -263,6 +314,27 @@ export default function RelationsPage() {
                 initialParentColumn={sourceColumn}
                 initialChildColumn={targetColumn}
             />
+
+            {/* リレーション削除確認ダイアログ */}
+            <Dialog open={!!deleteEdgeTarget} onOpenChange={(open) => { if (!open) setDeleteEdgeTarget(null) }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>リレーションを削除しますか？</DialogTitle>
+                        <DialogDescription>
+                            リレーション「{deleteEdgeTarget?.label}」を削除します。<br />
+                            削除すると関連する分析設定の特徴量設定にも影響する場合があります。この操作は元に戻せません。
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteEdgeTarget(null)} disabled={deleting}>
+                            キャンセル
+                        </Button>
+                        <Button variant="destructive" onClick={handleDeleteRelationConfirm} disabled={deleting}>
+                            {deleting ? "削除中..." : "削除する"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {alertState && (
                 <AppAlertDialog

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db import models
 from app import schemas
 from app.services.ml_service import MLService
+from app.core.deps import get_current_user
 
 router = APIRouter()
 
@@ -49,6 +50,26 @@ def run_ml_task(job_id: int):
     finally:
         db.close()
 
+@router.get("/jobs", response_model=list[schemas.TrainJob])
+def list_jobs(
+    project_id: int,
+    config_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    プロジェクト内の学習ジョブ一覧を返す
+    config_id を指定するとその設定に絞り込む
+    """
+    query = (
+        db.query(models.TrainJob)
+        .join(models.AnalysisConfig, models.TrainJob.config_id == models.AnalysisConfig.id)
+        .filter(models.AnalysisConfig.project_id == project_id)
+    )
+    if config_id is not None:
+        query = query.filter(models.TrainJob.config_id == config_id)
+    return query.order_by(models.TrainJob.id.desc()).all()
+
+
 @router.get("/status/{job_id}", response_model=schemas.TrainJob)
 def get_status(project_id: int, job_id: int, db: Session = Depends(get_db)):
     job = db.query(models.TrainJob).filter(models.TrainJob.id == job_id).first()
@@ -58,6 +79,40 @@ def get_status(project_id: int, job_id: int, db: Session = Depends(get_db)):
     if job.config.project_id != project_id:
          raise HTTPException(status_code=404, detail="Job not found in this project")
     return job
+
+@router.post("/cancel/{job_id}", response_model=schemas.TrainJob)
+def cancel_job(
+    project_id: int,
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    学習ジョブをキャンセルする
+    status が "running" または "pending" の場合のみキャンセル可能
+    """
+    # ジョブの取得
+    job = db.query(models.TrainJob).filter(models.TrainJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # プロジェクト整合性チェック
+    if job.config.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Job not found in this project")
+
+    # キャンセル可能なステータスか確認
+    if job.status not in ("running", "pending"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="完了・失敗済みのジョブはキャンセルできません",
+        )
+
+    # ステータスをキャンセルに変更してコミット
+    job.status = "cancelled"
+    db.commit()
+    db.refresh(job)
+    return job
+
 
 @router.get("/result/{job_id}", response_model=schemas.TrainResult)
 def get_result(project_id: int, job_id: int, db: Session = Depends(get_db)):

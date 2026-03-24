@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 sqlalchemy
+alembic
 psycopg2-binary
 python-dotenv
 pandas
@@ -9,3 +10,5 @@ lightgbm
 scikit-learn
 statsmodels
 matplotlib
+python-jose[cryptography]
+bcrypt

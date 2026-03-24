@@ -1,9 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(ls -la /c/Work/Analyzer/frontend/src/app/projects/[projectId]/dashboard/)",
-      "Bash(npm install react-markdown)",
-      "Bash(ls C:/Work/Analyzer/frontend/.env*)"
-    ]
+    "defaultMode": "bypassPermissions"
   }
 }

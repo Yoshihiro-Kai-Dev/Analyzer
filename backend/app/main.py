@@ -6,22 +6,8 @@ from dotenv import load_dotenv
 # 環境変数の読み込み
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env'))
 
-from app.db.session import engine, Base
-# モデルをインポートしてcreate_allでテーブル作成されるようにする
-from app.db import models
-
-# テーブル作成（alembic導入前の一時的な処置）
-Base.metadata.create_all(bind=engine)
-
-# 既存テーブルへのカラム追加マイグレーション（冪等）
-from sqlalchemy import text
-with engine.connect() as _conn:
-    _conn.execute(text("ALTER TABLE train_results ADD COLUMN IF NOT EXISTS tree_structure JSONB"))
-    _conn.execute(text("ALTER TABLE train_results ADD COLUMN IF NOT EXISTS decision_rules JSONB"))
-    _conn.execute(text("ALTER TABLE train_results ADD COLUMN IF NOT EXISTS model_type VARCHAR"))
-    _conn.execute(text("ALTER TABLE train_results ADD COLUMN IF NOT EXISTS coef_stats JSONB"))
-    _conn.execute(text("ALTER TABLE analysis_configs ADD COLUMN IF NOT EXISTS model_type VARCHAR DEFAULT 'gradient_boosting'"))
-    _conn.commit()
+# モデルをインポート（Alembicのautogenerateで認識されるために必要）
+from app.db import models  # noqa: F401
 
 app = FastAPI(title="wel-analyzer API", version="0.1.0")
 
@@ -44,7 +30,10 @@ def read_root():
     return {"message": "Welcome to wel-analyzer API"}
 
 # ルーターの追加
-from app.api.endpoints import projects, upload, tables, relations, analysis, train
+from app.api.endpoints import projects, upload, tables, relations, analysis, train, auth, predict
+
+# 認証ルーター
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 
@@ -54,3 +43,4 @@ app.include_router(tables.router, prefix="/api/projects/{project_id}/tables", ta
 app.include_router(relations.router, prefix="/api/projects/{project_id}/relations", tags=["relations"])
 app.include_router(analysis.router, prefix="/api/projects/{project_id}/analysis", tags=["analysis"])
 app.include_router(train.router, prefix="/api/projects/{project_id}/train", tags=["train"])
+app.include_router(predict.router, prefix="/api/projects/{project_id}/predict", tags=["predict"])
