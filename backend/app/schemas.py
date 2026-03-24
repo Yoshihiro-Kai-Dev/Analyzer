@@ -65,11 +65,13 @@ class ColumnCreate(ColumnBase):
     pass
 
 class ColumnUpdate(BaseModel):
-    inferred_type: str
+    inferred_type: Optional[str] = None    # Optionalに変更（value_labelsのみの更新を許可）
+    value_labels: Optional[Dict[str, str]] = None  # 追加: カテゴリ値のラベル辞書
 
 class Column(ColumnBase):
     id: int
     table_id: int
+    value_labels: Optional[Dict[str, str]] = None  # 追加: カテゴリ値のラベル辞書
 
     class Config:
         from_attributes = True
@@ -175,7 +177,13 @@ class PredictionJobResponse(BaseModel):
     status: str
     row_count: Optional[int] = None
     error_message: Optional[str] = None
+    name: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class PredictionJobRename(BaseModel):
+    """予測ジョブ名称変更リクエスト"""
+    name: str
