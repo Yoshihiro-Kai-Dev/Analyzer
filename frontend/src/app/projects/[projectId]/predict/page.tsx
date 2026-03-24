@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
 import { apiClient } from "@/lib/api"
 import { addNotification } from "@/lib/notifications"
-import { buildColLabelsMap } from "@/lib/labelUtils"
+import { buildColLabelsMap, stripTablePrefix } from "@/lib/labelUtils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -407,7 +407,8 @@ export default function PredictPage() {
                                 // predicted_value / rank 列はカラムメタデータに存在しないため colLabelsMap[h] は undefined になり
                                 // そのまま rawVal が表示される（安全なフォールスルー）
                                 const rawVal = String(row[h] ?? '')
-                                const labels = colLabelsMap[h]
+                                // テーブルプレフィックスを除去してカラム名でラベルマップを照合する
+                                const labels = colLabelsMap[stripTablePrefix(h)]
                                 const displayVal = labels?.[rawVal] ?? rawVal
                                 return (
                                   <TableCell key={h} className="text-xs font-mono">
