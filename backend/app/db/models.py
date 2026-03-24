@@ -78,7 +78,8 @@ class ColumnMetadata(Base):
     display_name = Column(String, comment="表示用カラム名（ヘッダー）")
     data_type = Column(String, comment="データ型（Pandas/DB型）")
     inferred_type = Column(String, comment="推論された分析用型（numeric, categorical, datetime等）")
-    
+    value_labels = Column(JSON, nullable=True, comment="カテゴリ値のラベル辞書 {\"0\": \"女児\", \"1\": \"男児\"}")
+
     table = relationship("TableMetadata", back_populates="columns")
 
 
@@ -239,6 +240,8 @@ class PredictionJob(Base):
     result_path = Column(String, nullable=True)  # 結果CSVの保存パス
     row_count = Column(Integer, nullable=True)
     error_message = Column(String, nullable=True)
+    # 予測ジョブの表示名（ユーザーが設定可能）
+    name = Column(String, nullable=True, comment="ジョブの表示名")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     config = relationship("AnalysisConfig", back_populates="prediction_jobs")
