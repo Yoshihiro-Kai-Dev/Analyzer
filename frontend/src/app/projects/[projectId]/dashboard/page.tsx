@@ -824,7 +824,12 @@ export default function DashboardPage() {
 
                                     // 予測値を計算する（線形: y = Σcoef*x + intercept, ロジスティック: sigmoid(Σcoef*x + intercept)）
                                     const logOdds = features.reduce((sum: number, r: any) => {
-                                        const val = simValues[r.feature] ?? 0
+                                        const labels = colLabelsMap[stripTablePrefix(r.feature)]
+                                        // ラベルがある場合は最初のキーを数値デフォルトにして表示と計算を一致させる
+                                        const defaultVal = labels
+                                            ? (parseFloat(Object.keys(labels)[0] ?? '0') || 0)
+                                            : 0
+                                        const val = simValues[r.feature] ?? defaultVal
                                         return sum + (r.coef ?? 0) * val
                                     }, intercept?.coef ?? 0)
 
