@@ -30,11 +30,7 @@ import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
 import { useAppAlert } from '@/hooks/use-app-alert';
 import { apiClient } from '@/lib/api'
 import { addNotification } from '@/lib/notifications'
-import { buildColLabelsMap } from "@/lib/labelUtils"
-
-// physical table name prefix を除去する（例: upload_p5_20260304161857_01_ → 削除）
-const stripTablePrefix = (name: string) =>
-    name.replace(/upload_p\d+_\d+_\d+_/g, '');
+import { buildColLabelsMap, stripTablePrefix } from "@/lib/labelUtils"
 
 // ── 決定木ノードコンポーネント ────────────────────────────────
 const DT_NODE_W = 200;

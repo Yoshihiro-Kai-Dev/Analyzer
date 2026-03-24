@@ -18,13 +18,12 @@ export function buildColLabelsMap(tables: any[]): Record<string, Record<string, 
 }
 
 /**
- * テーブルプレフィックス（例: "parent_table__col" → "col"）を除去する
- * ダブルアンダースコア区切りのプレフィックスを削除して物理カラム名を返す
+ * テーブルプレフィックス（例: "upload_p5_20260304_01_sex" → "sex"）を除去する
+ * 物理テーブル名（upload_p{N}_{TIMESTAMP}_{SEQ}_）パターンを削除して物理カラム名を返す
  *
  * @param colName プレフィックス付きまたはプレフィックスなしのカラム名
  * @returns プレフィックスを除去したカラム名
  */
 export function stripTablePrefix(colName: string): string {
-    const idx = colName.lastIndexOf('__')
-    return idx !== -1 ? colName.slice(idx + 2) : colName
+    return colName.replace(/upload_p\d+_\d+_\d+_/g, '')
 }
