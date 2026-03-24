@@ -11,9 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
 import axios from "axios"
-import { API_BASE_URL } from '@/lib/api'
+import { apiClient } from '@/lib/api'
 
-export function FileUpload({ projectId }: { projectId: string }) {
+interface FileUploadProps {
+    projectId: string
+    /** アップロード・型確認が完了したときに呼ばれるコールバック */
+    onUploadComplete?: () => void
+}
+
+export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
     const [file, setFile] = useState<File | null>(null)
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "type_review" | "completed">("idle")
     const [uploadProgress, setUploadProgress] = useState(0)
@@ -61,13 +67,15 @@ export function FileUpload({ projectId }: { projectId: string }) {
             const changedCols = reviewColumns.filter(col => col.inferred_type !== col.originalType)
             await Promise.all(
                 changedCols.map(col =>
-                    axios.patch(
-                        `${API_BASE_URL}/api/projects/${projectId}/tables/${reviewTableId}/columns/${col.id}`,
+                    apiClient.patch(
+                        `/api/projects/${projectId}/tables/${reviewTableId}/columns/${col.id}`,
                         { inferred_type: col.inferred_type }
                     )
                 )
             )
             setStatus("completed")
+            // 親コンポーネントにアップロード完了を通知（テーブル一覧の更新など）
+            onUploadComplete?.()
         } catch (err: any) {
             const detail = err.response?.data?.detail
             setError(typeof detail === 'string' ? detail : "型情報の保存に失敗しました")
@@ -77,7 +85,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
     const startPolling = (taskId: string) => {
         const poll = async () => {
             try {
-                const response = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/upload/status/${taskId}`)
+                const response = await apiClient.get(`/api/projects/${projectId}/upload/status/${taskId}`)
                 const data = response.data
 
                 setProcessingProgress(data.progress || 0)
@@ -89,7 +97,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
 
                     // テーブル一覧からアップロードしたテーブルのカラムID付き情報を取得
                     try {
-                        const tablesRes = await axios.get(`${API_BASE_URL}/api/projects/${projectId}/tables`)
+                        const tablesRes = await apiClient.get(`/api/projects/${projectId}/tables`)
                         const uploadedTable = tablesRes.data.find(
                             (t: any) => t.physical_table_name === data.result.physical_table_name
                         )
@@ -120,8 +128,13 @@ export function FileUpload({ projectId }: { projectId: string }) {
                     setStatus("idle")
                     if (pollingInterval.current) clearInterval(pollingInterval.current)
                 }
-            } catch (err) {
+            } catch (err: any) {
+                // ポーリング中のエラーはコンソールに加えてUI上にも表示する
                 console.error("Polling error", err)
+                const msg = err?.response?.data?.detail || err?.message || "ステータス確認中にエラーが発生しました"
+                setError(msg)
+                setStatus("idle")
+                if (pollingInterval.current) clearInterval(pollingInterval.current)
             }
         }
 
@@ -140,7 +153,7 @@ export function FileUpload({ projectId }: { projectId: string }) {
         formData.append("file", file)
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/api/projects/${projectId}/upload/csv`, formData, {
+            const response = await apiClient.post(`/api/projects/${projectId}/upload/csv`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 },
