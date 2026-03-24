@@ -1,278 +1,294 @@
-# Analyzer — データ分析・機械学習プラットフォーム
+# 分析くん（wel-analyzer）
 
-CSV データをアップロードし、テーブル結合・特徴量設定・LightGBM による学習までをブラウザ上で完結できる Web アプリケーションです。
+CSV をアップロードするだけで、テーブル結合・特徴量選択・機械学習モデルの学習・予測までをブラウザ上で完結できるノーコード Web アプリケーションです。
+複数ユーザーによるプロジェクト共有に対応しており、社内での共同利用を想定しています。
 
 ---
 
 ## 目次
 
-1. [事前準備（必須ソフトウェア）](#1-事前準備必須ソフトウェア)
-2. [リポジトリの取得](#2-リポジトリの取得)
-3. [環境変数の設定](#3-環境変数の設定)
-4. [データベースの作成](#4-データベースの作成)
-5. [バックエンドのセットアップ](#5-バックエンドのセットアップ)
-6. [フロントエンドのセットアップ](#6-フロントエンドのセットアップ)
-7. [アプリケーションの起動](#7-アプリケーションの起動)
-8. [テストデータの投入（任意）](#8-テストデータの投入任意)
-9. [トラブルシューティング](#9-トラブルシューティング)
+1. [機能一覧](#1-機能一覧)
+2. [技術スタック](#2-技術スタック)
+3. [事前準備](#3-事前準備)
+4. [セットアップ](#4-セットアップ)
+5. [起動方法](#5-起動方法)
+6. [使い方の流れ](#6-使い方の流れ)
+7. [テストデータ](#7-テストデータ)
+8. [トラブルシューティング](#8-トラブルシューティング)
 
 ---
 
-## 1. 事前準備（必須ソフトウェア）
+## 1. 機能一覧
 
-以下のソフトウェアを事前にインストールしてください。
+### 認証・ユーザー管理
+- ユーザー登録・ログイン（JWT 認証）
+- プロジェクト単位のメンバー共有（オーナー / 編集者 / 閲覧者 の 3 ロール）
 
-| ソフトウェア | バージョン目安 | 用途 | ダウンロード先 |
-|---|---|---|---|
-| **Git** | 2.40 以上 | リポジトリの取得 | https://git-scm.com/ |
-| **Python** | 3.10 〜 3.12 | バックエンド実行環境 | https://www.python.org/downloads/ |
-| **Node.js** | 18 以上（LTS 推奨） | フロントエンド実行環境 | https://nodejs.org/ |
-| **PostgreSQL** | 14 以上 | データベース | https://www.postgresql.org/download/ |
+### ポータル
+- プロジェクト一覧・作成・削除
+- プロジェクト名によるキーワード検索
+- アップロード・学習・予測の完了通知（ベルアイコン）
+
+### Step 1 — データ管理
+- CSV アップロード（バックグラウンド処理、進捗バー表示）
+- カラムの型推定（数値 / カテゴリ / 日時）と手動変更
+- カテゴリ変数への値ラベル設定（例: `0 → 女児`、`1 → 男児`）
+- カラムをクリックして統計情報・分布グラフを確認（数値型: ヒストグラム、カテゴリ型: 棒グラフ）
+- テーブルのコピー・データ差し替え・データ追加
+
+### Step 2 — リレーション設定
+- ReactFlow によるグラフ UI でテーブル間の結合キーを設定
+- カーディナリティ選択（1:1 / 1:多）
+- 結合マッチ率の表示（低マッチ率は警告色）
+
+### Step 3 — 分析設定
+- 目的変数・タスク種別（回帰 / 分類）の選択
+- 特徴量ごとの使用 / 除外・集計方法の設定
+- モデル種別の選択（LightGBM / 線形回帰 / ロジスティック回帰）
+
+### Step 4 — 学習・ダッシュボード
+- バックグラウンド学習（進捗バー）・学習キャンセル
+- 評価指標（Accuracy / F1 / RMSE 等）・混同行列
+- 特徴量重要度グラフ（上位 20 件）
+- 決定木の可視化（ReactFlow）・IF/THEN ルール一覧
+- **係数統計**（ロジスティック / 線形回帰）
+  - オッズ比 / 標準化偏回帰係数・95% 信頼区間・p 値・有意性
+  - **方向バッジ**：OR > 1 なら「値↑→リスク↑」、OR < 1 なら「値↑→リスク↓」
+  - **値ラベル凡例**：設定済みカテゴリ変数の値の意味を変数名の下に表示
+  - 係数は StandardScaler 標準化済み（1 SD 変化あたりの効果）
+- 数式の出力（`log-odds = a₁x₁ + a₂x₂ + ... + const`）
+- **値のシミュレーション**：特徴量の値を変えて予測値をリアルタイム計算（カテゴリ変数はドロップダウンで値ラベル表示）
+- 過去の学習ジョブ履歴の閲覧
+
+### Step 5 — 予測実行
+- CSV アップロードによる新規データへの一括予測
+- 予測完了後のアプリ内プレビュー（先頭 20 行・統計サマリー、値ラベルで翻訳表示）
+- 予測結果 CSV ダウンロード（`predicted_value`・`rank` 列付き）
+- 過去の予測ジョブ一覧・名称変更
+
+---
+
+## 2. 技術スタック
+
+| レイヤー | 技術 |
+|---|---|
+| フロントエンド | Next.js 16 (App Router), React 19, TypeScript, TailwindCSS 4, shadcn/ui, Radix UI, ReactFlow, Recharts |
+| バックエンド | FastAPI, SQLAlchemy 2, Alembic, Uvicorn |
+| 機械学習 | LightGBM, scikit-learn, statsmodels |
+| データベース | PostgreSQL 16 |
+| キャッシュ | Redis 7 |
+| インフラ | Docker Compose, nginx（リバースプロキシ） |
+
+---
+
+## 3. 事前準備
+
+**Docker Desktop** のみ必要です。Python・Node.js・PostgreSQL の個別インストールは不要です。
+
+| ソフトウェア | バージョン目安 | ダウンロード先 |
+|---|---|---|
+| **Docker Desktop** | 4.x 以上 | https://www.docker.com/products/docker-desktop/ |
+| **Git** | 2.40 以上 | https://git-scm.com/ |
 
 > [!IMPORTANT]
-> **Python** のインストール時に **「Add Python to PATH」にチェック** を入れてください。
-> PATH に追加しないと、ターミナルから `python` コマンドが認識されません。
-
-### インストール確認
-
-すべてインストールした後、ターミナル（PowerShell 等）で以下を実行し、バージョンが表示されることを確認してください。
-
-```bash
-git --version
-python --version
-node --version
-npm --version
-psql --version
-```
+> Docker Desktop を起動した状態でセットアップを進めてください。
 
 ---
 
-## 2. リポジトリの取得
+## 4. セットアップ
 
-ターミナルで作業用ディレクトリに移動し、リポジトリをクローン（ダウンロード）します。
+### 4.1 リポジトリの取得
 
 ```bash
 git clone https://github.com/Yoshihiro-Kai-Dev/Analyzer.git
 cd Analyzer
 ```
 
----
+### 4.2 環境変数の設定
 
-## 3. 環境変数の設定
+`.env.example` をコピーして `.env` を作成し、必要に応じて値を変更します。
 
-プロジェクトのルートディレクトリ（`Analyzer/` 直下）に `.env` ファイルを作成し、以下の内容を記述します。
-値はご自身の PostgreSQL の設定に合わせて変更してください。
+```bash
+# Windows (PowerShell)
+Copy-Item .env.example .env
+
+# macOS / Linux
+cp .env.example .env
+```
+
+`.env` の内容（最低限 `DB_PASSWORD` と `SECRET_KEY` を変更してください）:
 
 ```dotenv
 DB_USER=postgres
-DB_PASSWORD=your_password
+DB_PASSWORD=changeme              # 任意のパスワードに変更
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=wel_analyzer
+SECRET_KEY=change-this-to-a-random-secret-key-32chars-min   # 後述の方法で生成した文字列に変更
+REDIS_URL=redis://redis:6379/0
+APP_ENV=development
 ```
 
-| 変数名 | 説明 | 例 |
-|---|---|---|
-| `DB_USER` | PostgreSQL のユーザー名 | `postgres` |
-| `DB_PASSWORD` | 上記ユーザーのパスワード | `your_password` |
-| `DB_HOST` | DB サーバーのホスト名 | `localhost` |
-| `DB_PORT` | DB サーバーのポート番号 | `5432` |
-| `DB_NAME` | 使用するデータベース名 | `wel_analyzer` |
+#### SECRET_KEY について
 
-> [!CAUTION]
-> `.env` ファイルには認証情報が含まれます。`.gitignore` に登録済みのため Git にはコミットされませんが、取り扱いにはご注意ください。
+ログイン時に発行する **JWT トークンの署名キー**です。サーバーはこのキーでトークンを署名し、以降のリクエストで「自分が発行した正規のトークンか」を検証します。**漏洩すると第三者がトークンを偽造できる**ため、推測されにくいランダムな文字列を設定してください。
 
----
-
-## 4. データベースの作成
-
-PostgreSQL にログインし、アプリケーション用のデータベースを作成します。
-
-### 方法 A: コマンドラインから作成する場合
+以下のコマンドで生成できます（Python が手元にある場合）:
 
 ```bash
-# PostgreSQL にログイン
-psql -U postgres
-
-# データベースを作成（.env の DB_NAME と同じ名前にすること）
-CREATE DATABASE wel_analyzer;
-
-# ログアウト
-\q
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
-
-### 方法 B: pgAdmin（GUI ツール）から作成する場合
-
-1. pgAdmin を開きます。
-2. 左のツリーから **Servers → PostgreSQL → Databases** を右クリック → **Create → Database...**
-3. Database 名に `wel_analyzer` と入力して **Save** します。
 
 > [!NOTE]
-> テーブルの作成は不要です。アプリケーション初回起動時に自動で作成されます。
+> 社内ネットワーク内のみでの利用であれば、デフォルト値のままでも動作します。ただし本番運用や外部公開時は必ず変更してください。
+
+> [!CAUTION]
+> `.env` ファイルは `.gitignore` に登録済みです。Git にはコミットされませんが、取り扱いにご注意ください。
 
 ---
 
-## 5. バックエンドのセットアップ
+## 5. 起動方法
 
-### 5.1 仮想環境の作成と有効化
+### 初回起動・ソース変更後
 
 ```bash
-cd backend
+docker compose up --build -d
+```
 
-# 仮想環境を作成
-python -m venv venv
+### 2 回目以降（ソース変更なし）
 
-# 仮想環境を有効化
-# ■ Windows (PowerShell) の場合:
-.\venv\Scripts\Activate.ps1
-# ■ Windows (コマンドプロンプト) の場合:
-.\venv\Scripts\activate.bat
-# ■ macOS / Linux の場合:
-source venv/bin/activate
+```bash
+docker compose up -d
+```
+
+### 停止
+
+```bash
+docker compose down
+```
+
+### フロントエンドのソースのみ変更した場合
+
+```bash
+docker compose build frontend && docker compose up -d frontend
 ```
 
 > [!WARNING]
-> PowerShell でスクリプトの実行がブロックされる場合は、以下を **管理者権限** で実行してください。
-> ```powershell
-> Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-> ```
+> フロントエンドはプロダクションビルドで動作します。ソースを変更しただけでは反映されません。必ず上記の `build` を実行してください。
 
-### 5.2 依存パッケージのインストール
-
-仮想環境が有効化された状態（プロンプトに `(venv)` が表示されている状態）で実行します。
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## 6. フロントエンドのセットアップ
-
-新しいターミナルを開くか、`backend` ディレクトリから戻り、`frontend` ディレクトリに移動します。
-
-```bash
-cd frontend
-
-# 依存パッケージのインストール
-npm install
-```
-
----
-
-## 7. アプリケーションの起動
-
-バックエンドとフロントエンドを**それぞれ別のターミナル**で起動します。
-
-### 7.1 バックエンドの起動
-
-```bash
-cd backend
-
-# 仮想環境の有効化（まだの場合）
-.\venv\Scripts\Activate.ps1
-
-# FastAPI サーバーの起動
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-起動に成功すると、以下のような表示がされます。
-
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [xxxxx]
-```
-
-### 7.2 フロントエンドの起動
-
-**別のターミナル**を開いて実行します。
-
-```bash
-cd frontend
-
-# Next.js 開発サーバーの起動
-npm run dev
-```
-
-起動に成功すると、以下のような表示がされます。
-
-```
-▲ Next.js 16.x.x
-- Local:   http://localhost:3000
-```
-
-### 7.3 ブラウザでアクセス
-
-両方のサーバーが起動したら、ブラウザで以下の URL にアクセスしてください。
+### アクセス先
 
 | URL | 内容 |
 |---|---|
-| http://localhost:3000 | アプリケーション（フロントエンド） |
-| http://localhost:8000/docs | API ドキュメント（Swagger UI） |
+| http://localhost | アプリケーション |
+| http://localhost/api/docs | API ドキュメント（Swagger UI） |
 
 ---
 
-## 8. テストデータの投入（任意）
+## 6. 使い方の流れ
 
-テスト用のサンプル CSV データを生成するスクリプトが同梱されています。
+1. **ユーザー登録・ログイン** — トップページからアカウントを作成してログインします。
+2. **プロジェクト作成** — 「新規プロジェクト」ボタンからプロジェクトを作成します。必要に応じてメンバーを招待できます。
+3. **Step 1: データ管理** — CSV をアップロードします。カラムの型・値ラベルを必要に応じて設定します。
+4. **Step 2: リレーション設定** — 複数テーブルを使う場合、結合キーを設定します（単一テーブルの場合は省略可）。
+5. **Step 3: 分析設定** — 目的変数・タスク種別・モデルを選択します。
+6. **Step 4: ダッシュボード** — 「学習実行」ボタンを押して学習を開始します。完了後に評価指標・特徴量重要度・係数統計などを確認できます。
+7. **Step 5: 予測** — 予測対象の CSV をアップロードして予測を実行します。結果をアプリ内でプレビューするか CSV でダウンロードできます。
+
+---
+
+## 7. テストデータ
+
+`test/` ディレクトリに 3 種類のサンプルデータ生成スクリプトが用意されています。
 
 ```bash
 cd test
-python test_data_create.py
+python <スクリプト名>
 ```
 
-実行すると以下の 2 つの CSV ファイルが生成されます。
+| スクリプト | シナリオ | タスク種別 | 件数 |
+|---|---|---|---|
+| `test_data_create.py` | 個人属性・生活習慣 → 健診結果予測 | 回帰 | 10 万件 |
+| `sales_data_create.py` | 店舗マスタ × 販売実績 → 月次売上予測 | 回帰 | 6 万件 |
+| `child_abuse_data_create.py` | 家庭環境・支援状況 → 児童虐待通告発生予測 | 分類 | 5,000 件 |
 
-| ファイル名 | 内容 |
-|---|---|
-| `01_基本属性データ.csv` | 個人属性・生活習慣アンケートデータ（10 万件） |
-| `02_健診結果_ターゲット.csv` | 健診結果・予測ターゲットデータ（10 万件） |
+### child_abuse_data_create.py の出力ファイル
 
-生成された CSV ファイルをアプリケーション上でアップロードすることで、一通りの操作を試すことができます。
+| ファイル名 | 内容 | カラム数 |
+|---|---|---|
+| `01_説明変数.csv` | 家庭環境（12 項目）+ 支援状況（9 項目） | 21 |
+| `02_目的変数.csv` | 児童ID + 児童虐待通告_発生（目的変数） | 2 |
+
+**推奨利用手順（分析くん上での操作）:**
+
+1. `01_説明変数.csv` をアップロード
+2. `02_目的変数.csv` をアップロード
+3. リレーション設定: `児童ID` で 1:1 結合
+4. 分析設定: 目的変数 = `児童虐待通告_発生`、タスク = 分類、モデル = LightGBM またはロジスティック回帰
+5. 学習・予測を実行
 
 ---
 
-## 9. トラブルシューティング
+## 8. トラブルシューティング
 
-### `python` コマンドが見つからない
+### Docker Desktop が起動していない
 
-- Python インストール時に **「Add Python to PATH」** にチェックを入れたか確認してください。
-- Windows で `python` が動かない場合、`py` コマンドに置き換えて試してください。
+`docker compose up` 実行時にエラーが出る場合は、Docker Desktop を起動してから再試行してください。
 
-### PowerShell でスクリプト実行がブロックされる
+### ポート 80 が使用中
 
-以下を管理者権限の PowerShell で実行してください。
+他のサービスがポート 80 を使用している場合、`docker-compose.yml` の `nginx` サービスのポート設定を変更してください。
 
-```powershell
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+```yaml
+ports:
+  - "8080:80"   # 左の番号を空きポートに変更
 ```
 
-### `psycopg2` のインストールに失敗する
+変更後は `http://localhost:8080` でアクセスします。
 
-`psycopg2-binary` で解決しない場合は、PostgreSQL の開発用ヘッダが必要です。
+### データベースマイグレーションエラー
 
-- Windows: PostgreSQL インストーラーに含まれています。PATH に `PostgreSQL\xx\bin` が含まれているか確認してください。
-- macOS: `brew install postgresql` を実行してください。
-- Linux: `sudo apt install libpq-dev` を実行してください。
+コンテナ起動後にテーブルが正しく作成されない場合は、手動でマイグレーションを実行してください。
 
-### データベース接続エラー
+```bash
+docker compose exec backend alembic upgrade head
+```
 
-- PostgreSQL サービスが起動しているか確認してください。
-- `.env` の接続情報（ユーザー名・パスワード・ポート番号）が正しいか確認してください。
-- `wel_analyzer` データベースが作成済みか確認してください。
+### ログの確認
 
-### フロントエンドからバックエンドに接続できない
+```bash
+# バックエンドのログ
+docker compose logs backend
 
-- バックエンドが **ポート 8000** で起動しているか確認してください。
-- フロントエンドの API リクエスト先（`http://localhost:8000`）とバックエンドのポートが一致しているか確認してください。
+# フロントエンドのログ
+docker compose logs frontend
+
+# リアルタイムで追いかける場合
+docker compose logs -f backend
+```
+
+### コンテナを完全リセットする
+
+```bash
+# コンテナ・ボリューム（DBデータ）をすべて削除して再構築
+docker compose down -v
+docker compose up --build -d
+```
+
+> [!CAUTION]
+> `-v` オプションを付けると PostgreSQL のデータも削除されます。必要なデータは事前にバックアップしてください。
+
+### DBeaver から PostgreSQL に接続する
+
+`docker-compose.yml` の `postgres` サービスにポートを追加することで、DBeaver 等の外部ツールから接続できます。
+
+```yaml
+postgres:
+  image: postgres:16-alpine
+  ports:
+    - "5433:5432"   # この行を追加
+```
+
+接続情報: ホスト `localhost`、ポート `5433`、ユーザー・パスワード・DB 名は `.env` の設定値
 
 ---
-
-## 技術スタック
-
-| レイヤー | 技術 |
-|---|---|
-| フロントエンド | Next.js 16, React 19, TailwindCSS 4, shadcn/ui |
-| バックエンド | FastAPI, SQLAlchemy, Uvicorn |
-| データベース | PostgreSQL |
-| 機械学習 | LightGBM, scikit-learn |

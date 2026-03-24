@@ -49,6 +49,14 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
+  /* セマンティックカラー */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-muted: var(--warning-muted);
+
   /* サイドバー専用カラー */
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -79,65 +87,78 @@
 
 /* =====================================================
    ライトモード カラーパレット
-   テーマ: クリーンホワイト / ブルー系
+   テーマ: Deep Indigo × Amber（ML専門ツール向け）
    ===================================================== */
 :root {
-  /* 角丸基準値 */
-  --radius: 0.5rem;
+  /* 角丸基準値（10px — 少し丸みを増す） */
+  --radius: 0.625rem;
 
   /* 背景・テキスト */
-  --background: hsl(210, 40%, 98%);
-  --foreground: hsl(222, 47%, 11%);
+  --background: hsl(240, 20%, 98%);
+  --foreground: hsl(240, 25%, 12%);
 
   /* カード */
   --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(222, 47%, 11%);
+  --card-foreground: hsl(240, 25%, 12%);
 
   /* ポップオーバー */
   --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(222, 47%, 11%);
+  --popover-foreground: hsl(240, 25%, 12%);
 
-  /* プライマリ: ブルー系 */
-  --primary: hsl(221, 83%, 53%);
+  /* プライマリ: Deep Indigo */
+  --primary: hsl(243, 75%, 59%);
   --primary-foreground: hsl(0, 0%, 100%);
 
-  /* セカンダリ: 薄いグレーブルー */
-  --secondary: hsl(210, 40%, 96%);
-  --secondary-foreground: hsl(222, 47%, 11%);
+  /* セカンダリ: 薄いインディゴ */
+  --secondary: hsl(243, 40%, 95%);
+  --secondary-foreground: hsl(243, 40%, 30%);
 
   /* ミュート: 非強調 */
-  --muted: hsl(210, 40%, 96%);
-  --muted-foreground: hsl(215, 16%, 47%);
+  --muted: hsl(240, 15%, 95%);
+  --muted-foreground: hsl(240, 10%, 50%);
 
   /* アクセント: ホバー背景 */
-  --accent: hsl(210, 40%, 93%);
-  --accent-foreground: hsl(222, 47%, 11%);
+  --accent: hsl(243, 40%, 93%);
+  --accent-foreground: hsl(243, 50%, 30%);
 
   /* デストラクティブ: 赤系 */
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 100%);
 
   /* ボーダー・入力・フォーカスリング */
-  --border: hsl(214, 32%, 91%);
-  --input: hsl(214, 32%, 91%);
-  --ring: hsl(221, 83%, 53%);
+  --border: hsl(240, 15%, 88%);
+  --input: hsl(240, 15%, 88%);
+  --ring: hsl(243, 75%, 59%);
 
-  /* チャートカラー（青・緑・オレンジ・紫・赤） */
-  --chart-1: hsl(221, 83%, 53%);
-  --chart-2: hsl(142, 71%, 45%);
-  --chart-3: hsl(38, 92%, 50%);
-  --chart-4: hsl(280, 65%, 60%);
-  --chart-5: hsl(0, 84%, 60%);
+  /* セマンティックカラー */
+  --success: hsl(151, 55%, 42%);
+  --success-foreground: hsl(0, 0%, 100%);
+  --success-muted: hsl(151, 55%, 95%);
+  --warning: hsl(38, 96%, 54%);
+  --warning-foreground: hsl(38, 96%, 18%);
+  --warning-muted: hsl(38, 96%, 95%);
 
-  /* サイドバー */
-  --sidebar: hsl(0, 0%, 100%);
-  --sidebar-foreground: hsl(222, 47%, 11%);
-  --sidebar-primary: hsl(221, 83%, 53%);
+  /* チャートカラー（インディゴ・エメラルド・アンバー・ピンク・シアン） */
+  --chart-1: hsl(243, 75%, 59%);
+  --chart-2: hsl(151, 55%, 42%);
+  --chart-3: hsl(38, 96%, 54%);
+  --chart-4: hsl(320, 65%, 57%);
+  --chart-5: hsl(192, 80%, 46%);
+
+  /* エレベーション */
+  --shadow-sm: 0 1px 3px hsl(243 30% 12% / 0.06), 0 1px 2px hsl(243 30% 12% / 0.04);
+  --shadow-md: 0 4px 12px hsl(243 30% 12% / 0.08), 0 2px 4px hsl(243 30% 12% / 0.05);
+  --shadow-lg: 0 12px 32px hsl(243 30% 12% / 0.12), 0 4px 8px hsl(243 30% 12% / 0.06);
+
+  /* サイドバー: ダークインディゴ */
+  --sidebar: hsl(243, 40%, 18%);
+  --sidebar-foreground: hsl(240, 20%, 88%);
+  --sidebar-primary: hsl(243, 75%, 70%);
   --sidebar-primary-foreground: hsl(0, 0%, 100%);
-  --sidebar-accent: hsl(221, 83%, 96%);
-  --sidebar-accent-foreground: hsl(221, 83%, 40%);
-  --sidebar-border: hsl(214, 32%, 91%);
-  --sidebar-ring: hsl(221, 83%, 53%);
+  --sidebar-accent: hsl(243, 40%, 26%);
+  --sidebar-accent-foreground: hsl(0, 0%, 100%);
+  --sidebar-border: hsl(243, 30%, 24%);
+  --sidebar-ring: hsl(243, 75%, 70%);
 }
 
 /* =====================================================
@@ -263,6 +284,29 @@
 /* =====================================================
    共通ユーティリティ
    ===================================================== */
+
+/* グラデーションテキスト（ページタイトル・ブランド表示用） */
+.gradient-text {
+  background: linear-gradient(135deg, var(--primary), hsl(280, 70%, 65%));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* KPIカードの左ボーダーアクセント */
+.kpi-card {
+  border-left: 3px solid var(--primary);
+}
+
+/* 成功KPIカード */
+.kpi-card-success {
+  border-left: 3px solid var(--success);
+}
+
+/* 警告KPIカード */
+.kpi-card-warning {
+  border-left: 3px solid var(--warning);
+}
 
 /* --- カードのパディング統一 ---
    セクション内のコンテンツは px-6 py-5 を基準に */

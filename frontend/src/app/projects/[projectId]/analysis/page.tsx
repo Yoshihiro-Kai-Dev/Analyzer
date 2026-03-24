@@ -214,7 +214,7 @@ export default function AnalysisConfigPage() {
                 </div>
 
                 {loadingConfigs ? (
-                    <p className="text-sm text-gray-500">設定を読み込んでいます...</p>
+                    <p className="text-sm text-muted-foreground">設定を読み込んでいます...</p>
                 ) : configs.length === 0 ? (
                     <div className="border border-dashed border-border rounded-lg p-6 text-center text-muted-foreground text-sm">
                         保存済みの分析設定がありません。下のウィザードで設定を作成してください。
@@ -248,7 +248,7 @@ export default function AnalysisConfigPage() {
                                         </Badge>
                                     </div>
                                     {config.created_at && (
-                                        <p className="text-xs text-gray-400">
+                                        <p className="text-xs text-muted-foreground">
                                             作成日: {new Date(config.created_at).toLocaleDateString('ja-JP')}
                                         </p>
                                     )}
@@ -339,7 +339,7 @@ export default function AnalysisConfigPage() {
                         <div className="space-y-6">
                             <div className="space-y-2">
                                 <Label htmlFor="config-name" className="text-lg">設定名</Label>
-                                <p className="text-sm text-gray-500">この分析設定の名前を入力してください。後からダッシュボードで識別するために使います。</p>
+                                <p className="text-sm text-muted-foreground">この分析設定の名前を入力してください。後からダッシュボードで識別するために使います。</p>
                                 <Input
                                     id="config-name"
                                     value={configName}
@@ -350,7 +350,7 @@ export default function AnalysisConfigPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-lg">メインテーブルを選択</Label>
-                                <p className="text-sm text-gray-500">分析の主体となるデータ（例: 売上データ、ユーザーマスタなど）を選択してください。</p>
+                                <p className="text-sm text-muted-foreground">分析の主体となるデータ（例: 売上データ、ユーザーマスタなど）を選択してください。</p>
                             </div>
 
                             <RadioGroup value={mainTableId} onValueChange={setMainTableId} className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -368,7 +368,7 @@ export default function AnalysisConfigPage() {
                                             <Label htmlFor={`t-${table.id}`} className="font-semibold cursor-pointer truncate text-base">
                                                 {table.physical_table_name}
                                             </Label>
-                                            <p className="text-xs text-gray-500 truncate" title={table.original_filename}>
+                                            <p className="text-xs text-muted-foreground truncate" title={table.original_filename}>
                                                 元ファイル: {table.original_filename}
                                             </p>
                                             {/* テーブルの行数・カラム数情報をバッジで表示 */}
@@ -418,7 +418,7 @@ export default function AnalysisConfigPage() {
 
                             <div className="space-y-2">
                                 <Label className="text-lg">予測対象（目的変数）を選択</Label>
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-muted-foreground">
                                     {getTargetTable()?.physical_table_name} の中から、予測したいカラムを選択してください。<br />
                                     数値型を選ぶと「回帰」、カテゴリ型を選ぶと「分類」タスクとして自動設定されます。
                                 </p>
@@ -449,7 +449,7 @@ export default function AnalysisConfigPage() {
                                                 }`}>
                                                 {col.inferred_type}
                                             </Badge>
-                                            <span className="text-xs text-gray-400">{col.data_type}</span>
+                                            <span className="text-xs text-muted-foreground">{col.data_type}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -479,7 +479,7 @@ export default function AnalysisConfigPage() {
                             {/* モデル選択 */}
                             <div className="space-y-3 pt-2">
                                 <Label className="text-base font-medium">使用モデルを選択</Label>
-                                <p className="text-sm text-gray-500">学習に使用するアルゴリズムを選択してください。</p>
+                                <p className="text-sm text-muted-foreground">学習に使用するアルゴリズムを選択してください。</p>
                                 <RadioGroup
                                     value={modelType}
                                     onValueChange={(v) => setModelType(v as "gradient_boosting" | "logistic_regression")}
@@ -489,7 +489,7 @@ export default function AnalysisConfigPage() {
                                         <RadioGroupItem value="gradient_boosting" id="m-gb" className="mt-1 text-primary" />
                                         <div>
                                             <Label htmlFor="m-gb" className="font-semibold cursor-pointer text-sm">勾配ブースティング (LightGBM)</Label>
-                                            <p className="text-xs text-gray-500 mt-0.5">非線形・複雑な関係の把握に強い高精度モデル</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">非線形・複雑な関係の把握に強い高精度モデル</p>
                                         </div>
                                     </div>
                                     <div className={`flex items-start space-x-3 border p-4 rounded-lg cursor-pointer transition-colors hover:bg-secondary/20 ${modelType === 'logistic_regression' ? 'border-primary bg-primary/10' : 'border-input'}`}>
@@ -498,7 +498,7 @@ export default function AnalysisConfigPage() {
                                             <Label htmlFor="m-lr" className="font-semibold cursor-pointer text-sm">
                                                 {taskType === 'classification' ? 'ロジスティック回帰' : '線形回帰'}
                                             </Label>
-                                            <p className="text-xs text-gray-500 mt-0.5">シンプルで解釈しやすい線形モデル</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">シンプルで解釈しやすい線形モデル</p>
                                         </div>
                                     </div>
                                 </RadioGroup>
@@ -532,14 +532,14 @@ export default function AnalysisConfigPage() {
 
                             <div className="space-y-2">
                                 <Label className="text-lg">特徴量エンジニアリング（自動提案）</Label>
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-muted-foreground">
                                     リレーション定義に基づき、以下の特徴量を自動生成します。<br />
                                     不要なものはチェックを外してください。
                                 </p>
                             </div>
 
                             {loading ? (
-                                <div className="flex justify-center py-10 text-gray-400">提案を生成中...</div>
+                                <div className="flex justify-center py-10 text-muted-foreground">提案を生成中...</div>
                             ) : suggestions.length === 0 ? (
                                 <div className="text-center py-10 text-muted-foreground bg-secondary/20 rounded-lg border border-dashed border-border">
                                     <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -597,7 +597,7 @@ export default function AnalysisConfigPage() {
                                                         {sug.description}
                                                         <Badge variant="secondary" className="text-[10px] font-normal h-5">{sug.suggestion_type}</Badge>
                                                     </Label>
-                                                    <p className="text-gray-500 text-xs">
+                                                    <p className="text-muted-foreground text-xs">
                                                         テーブル: <span className="font-mono">{sug.table_name}</span> /
                                                         カラム: <span className="font-mono">{sug.column_name}</span> /
                                                         操作: <span className="font-mono">{sug.operations.join(", ")}</span>

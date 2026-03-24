@@ -682,8 +682,8 @@ export default function DashboardPage() {
                                 </CardTitle>
                                 <CardDescription>
                                     {result.coef_stats[0]?.odds_ratio != null
-                                        ? '各特徴量のオッズ比・p値・95%信頼区間（ロジスティック回帰）。OR>1 でリスク増加、OR<1 でリスク低下を示します。'
-                                        : '各特徴量の標準化偏回帰係数・p値・95%信頼区間（線形回帰）。係数の絶対値が大きいほど影響が強い特徴量です。'}
+                                        ? '各特徴量のオッズ比・p値・95%信頼区間（ロジスティック回帰）。係数はStandardScalerで標準化済みのため、ORは「値が1SD増えたときの効果」を表します。'
+                                        : '各特徴量の標準化偏回帰係数・p値・95%信頼区間（線形回帰）。係数はStandardScalerで標準化済み（1SD変化あたりの効果）。'}
                                     <span className="ml-2 text-xs text-muted-foreground">*** p&lt;0.001　** p&lt;0.01　* p&lt;0.05　n.s. 非有意</span>
                                 </CardDescription>
                             </CardHeader>
@@ -706,6 +706,7 @@ export default function DashboardPage() {
                                                 )}
                                                 <th className="px-3 py-2 font-medium text-muted-foreground text-right">p値</th>
                                                 <th className="px-3 py-2 font-medium text-muted-foreground text-center">有意性</th>
+                                                <th className="px-3 py-2 font-medium text-muted-foreground text-center">方向</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -714,10 +715,33 @@ export default function DashboardPage() {
                                                 const isOdds = row.odds_ratio != null;
                                                 const mainVal = isOdds ? row.odds_ratio : row.coef;
                                                 const isSignificant = row.p_value < 0.05;
+                                                // 値ラベルマップ（フル名→短縮名の順でフォールバック）
+                                                const labels = colLabelsMap[row.feature] ?? colLabelsMap[stripTablePrefix(row.feature)]
+                                                // 係数の正負から方向バッジを決定する（OR: 1との比較, 線形: 0との比較）
+                                                const isUp = isOdds ? mainVal > 1.0 : row.coef > 0
+                                                const dirLabel = isOdds
+                                                    ? (isUp ? '値↑→リスク↑' : '値↑→リスク↓')
+                                                    : (isUp ? '値↑→予測↑' : '値↑→予測↓')
+                                                const dirColor = isUp
+                                                    ? 'text-destructive bg-destructive/10'
+                                                    : 'text-primary bg-primary/10'
                                                 return (
                                                     <tr key={idx} className={`border-b transition-colors hover:bg-secondary/10 ${isSignificant ? '' : 'opacity-60'}`}>
-                                                        <td className="px-3 py-2 font-mono text-xs max-w-[200px] truncate" title={stripTablePrefix(row.feature)}>
-                                                            {stripTablePrefix(row.feature)}
+                                                        <td className="px-3 py-2 max-w-[220px]">
+                                                            {/* 変数名 */}
+                                                            <div className="font-mono text-xs truncate" title={stripTablePrefix(row.feature)}>
+                                                                {stripTablePrefix(row.feature)}
+                                                            </div>
+                                                            {/* 値ラベル凡例（設定されている列のみ表示） */}
+                                                            {labels && (
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    {Object.entries(labels).map(([val, lbl]) => (
+                                                                        <span key={val} className="text-[10px] text-muted-foreground bg-secondary px-1 py-0.5 rounded leading-none">
+                                                                            {val}:{lbl as string}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </td>
                                                         <td className={`px-3 py-2 text-right font-semibold tabular-nums ${mainVal > 1 || mainVal >= 0 ? 'text-destructive' : 'text-primary'}`}>
                                                             {mainVal.toFixed(3)}
@@ -730,6 +754,11 @@ export default function DashboardPage() {
                                                         </td>
                                                         <td className={`px-3 py-2 text-center font-bold text-sm ${sig.color}`}>
                                                             {sig.mark}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center">
+                                                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${dirColor}`}>
+                                                                {dirLabel}
+                                                            </span>
                                                         </td>
                                                     </tr>
                                                 );
@@ -820,7 +849,8 @@ export default function DashboardPage() {
 
                                     // 予測値を計算する（線形: y = Σcoef*x + intercept, ロジスティック: sigmoid(Σcoef*x + intercept)）
                                     const logOdds = features.reduce((sum: number, r: any) => {
-                                        const labels = colLabelsMap[stripTablePrefix(r.feature)]
+                                        // フル名で照合し、なければ短縮名でフォールバック（メインテーブル列は prefix なし）
+                                        const labels = colLabelsMap[r.feature] ?? colLabelsMap[stripTablePrefix(r.feature)]
                                         // ラベルがある場合は最初のキーを数値デフォルトにして表示と計算を一致させる
                                         const defaultVal = labels
                                             ? (parseFloat(Object.keys(labels)[0] ?? '0') || 0)
@@ -852,8 +882,8 @@ export default function DashboardPage() {
                                                 {features.slice(0, 20).map((r: any) => {
                                                     const fname = stripTablePrefix(r.feature)
                                                     const val = simValues[r.feature] ?? 0
-                                                    // カラム名からラベルマップを取得する（テーブルプレフィックスを除去して照合）
-                                                    const labels = colLabelsMap[stripTablePrefix(r.feature)]
+                                                    // フル名で照合し、なければ短縮名でフォールバック（メインテーブル列は prefix なし）
+                                                    const labels = colLabelsMap[r.feature] ?? colLabelsMap[stripTablePrefix(r.feature)]
                                                     return (
                                                         <div key={r.feature} className="flex items-center gap-2">
                                                             <span className="text-xs font-mono text-muted-foreground truncate flex-1 min-w-0" title={fname}>

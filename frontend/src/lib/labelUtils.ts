@@ -10,7 +10,10 @@ export function buildColLabelsMap(tables: any[]): Record<string, Record<string, 
     tables.forEach(t => {
         t.columns?.forEach((c: any) => {
             if (c.value_labels && Object.keys(c.value_labels).length > 0) {
+                // 短縮名（physical_name のみ）でも引けるようにする（メインテーブル列の場合）
                 map[c.physical_name] = c.value_labels
+                // テーブル名付きフル名でも引けるようにする（結合後の特徴量名: "{table_name}_{col_name}"）
+                map[`${t.physical_table_name}_${c.physical_name}`] = c.value_labels
             }
         })
     })

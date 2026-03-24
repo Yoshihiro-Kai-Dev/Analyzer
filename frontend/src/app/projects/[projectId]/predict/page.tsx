@@ -407,8 +407,8 @@ export default function PredictPage() {
                                 // predicted_value / rank 列はカラムメタデータに存在しないため colLabelsMap[h] は undefined になり
                                 // そのまま rawVal が表示される（安全なフォールスルー）
                                 const rawVal = String(row[h] ?? '')
-                                // テーブルプレフィックスを除去してカラム名でラベルマップを照合する
-                                const labels = colLabelsMap[stripTablePrefix(h)]
+                                // フル名で照合し、なければ短縮名でフォールバック（メインテーブル列は prefix なし）
+                                const labels = colLabelsMap[h] ?? colLabelsMap[stripTablePrefix(h)]
                                 const displayVal = labels?.[rawVal] ?? rawVal
                                 return (
                                   <TableCell key={h} className="text-xs font-mono">

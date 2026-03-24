@@ -117,20 +117,29 @@ export default function RelationsPage() {
             }));
 
             // Edges（エッジのdataにrelation.idを持たせて削除時に利用する）
-            const initialEdges: Edge[] = relations.map((rel: any) => ({
-                id: `e${rel.parent_table_id}-${rel.child_table_id}`,
-                source: rel.parent_table_id.toString(),
-                target: rel.child_table_id.toString(),
-                sourceHandle: `source-${rel.join_keys.parent_col}`,
-                targetHandle: `target-${rel.join_keys.child_col}`,
-                label: rel.cardinality === 'OneToMany' ? '1:N' : '1:1',
-                type: 'smoothstep',
-                animated: false,
-                style: { stroke: 'var(--color-foreground)', strokeWidth: 2 },
-                markerEnd: { type: MarkerType.ArrowClosed },
-                // relation.id を data に保持して削除時に参照できるようにする
-                data: { join_keys: rel.join_keys, relation_id: rel.id }
-            }));
+            const initialEdges: Edge[] = relations.map((rel: any) => {
+                // マッチ率に応じてエッジの色を変える（70%未満は警告色）
+                const matchRateLabel = rel.match_rate != null ? ` (${rel.match_rate}%)` : ''
+                const cardinalityLabel = rel.cardinality === 'OneToMany' ? '1:N' : '1:1'
+                const isLowMatch = rel.match_rate != null && rel.match_rate < 70
+                return {
+                    id: `e${rel.parent_table_id}-${rel.child_table_id}`,
+                    source: rel.parent_table_id.toString(),
+                    target: rel.child_table_id.toString(),
+                    sourceHandle: `source-${rel.join_keys.parent_col}`,
+                    targetHandle: `target-${rel.join_keys.child_col}`,
+                    label: `${cardinalityLabel}${matchRateLabel}`,
+                    type: 'smoothstep',
+                    animated: false,
+                    style: {
+                        stroke: isLowMatch ? 'var(--warning, #f59e0b)' : 'var(--primary)',
+                        strokeWidth: 2,
+                    },
+                    markerEnd: { type: MarkerType.ArrowClosed },
+                    // relation.id を data に保持して削除時に参照できるようにする
+                    data: { join_keys: rel.join_keys, relation_id: rel.id }
+                }
+            });
 
             // Auto Layout
             const layouted = getLayoutedElements(initialNodes, initialEdges);

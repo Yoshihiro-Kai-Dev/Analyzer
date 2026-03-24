@@ -2,10 +2,18 @@
 
 import { useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 const INITIAL_DISPLAY_COUNT = 5;
+
+// 型ごとのアイコンラベルと色スタイル
+const TYPE_META: Record<string, { icon: string; style: React.CSSProperties }> = {
+    numeric:     { icon: '#', style: { background: 'hsl(243 75% 97%)', color: 'hsl(243 75% 55%)', border: '1px solid hsl(243 75% 80%)' } },
+    categorical: { icon: 'A', style: { background: 'hsl(151 55% 95%)', color: 'hsl(151 55% 35%)', border: '1px solid hsl(151 55% 70%)' } },
+    datetime:    { icon: '⏰', style: { background: 'hsl(38 96% 95%)', color: 'hsl(38 96% 35%)',  border: '1px solid hsl(38 96% 70%)' } },
+    id:          { icon: '🔑', style: { background: 'hsl(270 60% 96%)', color: 'hsl(270 60% 45%)', border: '1px solid hsl(270 60% 75%)' } },
+    text:        { icon: 'T', style: { background: 'hsl(200 60% 95%)', color: 'hsl(200 60% 40%)', border: '1px solid hsl(200 60% 70%)' } },
+}
 
 interface Column {
     id: number;
@@ -29,54 +37,121 @@ export function TableNode({ data }: TableNodeProps) {
     const hiddenCount = data.columns.length - INITIAL_DISPLAY_COUNT;
 
     return (
-        <Card className="min-w-[200px] border-2 shadow-sm bg-white">
-            <CardHeader className="p-3 bg-gray-50 border-b">
-                <CardTitle className="text-sm font-bold text-gray-800 text-center">
+        <div
+            className="min-w-[220px] rounded-xl overflow-hidden"
+            style={{
+                border: '1px solid var(--border)',
+                background: 'var(--card)',
+                boxShadow: 'var(--shadow-md)',
+            }}
+        >
+            {/* ─ ノードヘッダー（ダークインディゴ背景） ─ */}
+            <div
+                className="px-3 py-2.5"
+                style={{ background: 'var(--sidebar)', borderBottom: '1px solid var(--sidebar-border)' }}
+            >
+                <p
+                    className="text-sm font-bold leading-tight truncate"
+                    style={{ color: 'var(--sidebar-foreground)' }}
+                    title={data.label}
+                >
                     {data.label}
-                </CardTitle>
-                <p className="text-[10px] text-center text-gray-400 truncate" title={data.physical_table_name}>{data.physical_table_name}</p>
-                <p className="text-xs text-center text-gray-500">{data.row_count.toLocaleString()} 行</p>
-            </CardHeader>
-            <CardContent className="p-0">
-                <div className="flex flex-col">
-                    {displayColumns.map((col) => (
-                        <div key={col.id} className="relative px-3 py-2 text-xs border-b last:border-b-0 flex justify-between items-center hover:bg-gray-50">
-                            {/* Left Handle (Target) */}
+                </p>
+                <p
+                    className="text-[10px] font-mono truncate mt-0.5 opacity-50"
+                    style={{ color: 'var(--sidebar-foreground)' }}
+                    title={data.physical_table_name}
+                >
+                    {data.physical_table_name}
+                </p>
+                <p
+                    className="text-[11px] mt-0.5 opacity-70"
+                    style={{ color: 'var(--sidebar-foreground)' }}
+                >
+                    {data.row_count.toLocaleString()} 行
+                </p>
+            </div>
+
+            {/* ─ カラム一覧 ─ */}
+            <div className="flex flex-col">
+                {displayColumns.map((col) => {
+                    const meta = TYPE_META[col.inferred_type] ?? { icon: '?', style: { background: 'var(--muted)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' } }
+                    return (
+                        <div
+                            key={col.id}
+                            className="relative px-3 py-2 flex justify-between items-center"
+                            style={{ borderBottom: '1px solid var(--border)' }}
+                        >
+                            {/* Left Handle（結合先ハンドル） */}
                             <Handle
                                 type="target"
                                 position={Position.Left}
                                 id={`target-${col.physical_name}`}
-                                className="w-2 h-2 !bg-blue-400 !border-none"
-                                style={{ left: -5, top: '50%' }}
+                                style={{
+                                    left: -6,
+                                    top: '50%',
+                                    width: 12,
+                                    height: 12,
+                                    background: 'var(--primary)',
+                                    border: '2px solid white',
+                                    borderRadius: '50%',
+                                }}
                             />
 
-                            <span className="font-medium text-gray-700">{col.physical_name}</span>
-                            <span className="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">{col.inferred_type}</span>
+                            <span
+                                className="text-xs font-medium font-mono truncate pr-2"
+                                style={{ color: 'var(--foreground)' }}
+                            >
+                                {col.physical_name}
+                            </span>
 
-                            {/* Right Handle (Source) */}
+                            {/* 型バッジ */}
+                            <span
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                                style={meta.style}
+                            >
+                                {meta.icon}
+                            </span>
+
+                            {/* Right Handle（結合元ハンドル） */}
                             <Handle
                                 type="source"
                                 position={Position.Right}
                                 id={`source-${col.physical_name}`}
-                                className="w-2 h-2 !bg-blue-400 !border-none"
-                                style={{ right: -5, top: '50%' }}
+                                style={{
+                                    right: -6,
+                                    top: '50%',
+                                    width: 12,
+                                    height: 12,
+                                    background: 'var(--primary)',
+                                    border: '2px solid white',
+                                    borderRadius: '50%',
+                                }}
                             />
                         </div>
-                    ))}
-                    {hiddenCount > 0 && (
-                        <button
-                            className="px-3 py-1.5 text-[10px] text-blue-500 text-center bg-gray-50 hover:bg-gray-100 flex items-center justify-center gap-1 w-full nodrag"
-                            onClick={() => setExpanded(!expanded)}
-                        >
-                            {expanded ? (
-                                <><ChevronUp className="w-3 h-3" />折りたたむ</>
-                            ) : (
-                                <><ChevronDown className="w-3 h-3" />他 {hiddenCount} 件のカラムを表示</>
-                            )}
-                        </button>
-                    )}
-                </div>
-            </CardContent>
-        </Card>
+                    )
+                })}
+
+                {/* 展開/折りたたみボタン */}
+                {hiddenCount > 0 && (
+                    <button
+                        className="px-3 py-1.5 text-[11px] flex items-center justify-center gap-1 w-full nodrag transition-colors"
+                        style={{
+                            color: 'var(--primary)',
+                            background: 'var(--secondary)',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--secondary)'}
+                        onClick={() => setExpanded(!expanded)}
+                    >
+                        {expanded ? (
+                            <><ChevronUp className="w-3 h-3" />折りたたむ</>
+                        ) : (
+                            <><ChevronDown className="w-3 h-3" />他 {hiddenCount} 件を表示</>
+                        )}
+                    </button>
+                )}
+            </div>
+        </div>
     );
 }
