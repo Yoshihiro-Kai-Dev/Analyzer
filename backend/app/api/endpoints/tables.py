@@ -52,7 +52,14 @@ def delete_table(
 
 
 @router.patch("/{table_id}/columns/{column_id}", response_model=schemas.Column)
-def update_column(project_id: int, table_id: int, column_id: int, update: schemas.ColumnUpdate, db: Session = Depends(get_db)):
+def update_column(
+    project_id: int,
+    table_id: int,
+    column_id: int,
+    update: schemas.ColumnUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """
     カラムの推論型・値ラベルを更新する
     どちらも省略可能で、指定されたフィールドのみ更新する
@@ -62,7 +69,7 @@ def update_column(project_id: int, table_id: int, column_id: int, update: schema
         models.ColumnMetadata.table_id == table_id
     ).first()
     if not col:
-        raise HTTPException(status_code=404, detail="Column not found")
+        raise HTTPException(status_code=404, detail="カラムが見つかりません")
     if update.inferred_type is not None:
         col.inferred_type = update.inferred_type
     if update.value_labels is not None:
