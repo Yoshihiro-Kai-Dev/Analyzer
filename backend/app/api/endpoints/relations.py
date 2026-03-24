@@ -1,3 +1,4 @@
+import sqlalchemy
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Set
@@ -143,10 +144,11 @@ def delete_relation(
     return relation
 
 
-@router.get("/", response_model=List[schemas.Relation])
+@router.get("/")
 def read_relations(project_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """
     リレーション定義の一覧を取得する
+    各リレーションにテーブル結合のマッチ率（%）を付加して返す
     """
     # プロジェクト内のテーブルに関連するリレーションのみ取得
     # RelationDefinition -> TableMetadata (parent) -> project_id check
@@ -155,5 +157,49 @@ def read_relations(project_id: int, skip: int = 0, limit: int = 100, db: Session
     ).filter(
         models.TableMetadata.project_id == project_id
     ).offset(skip).limit(limit).all()
-    
-    return relations
+
+    result = []
+    for rel in relations:
+        # マッチ率を計算する（子テーブルの結合キーが親テーブルに存在する割合）
+        match_rate = None
+        try:
+            parent_table = db.query(models.TableMetadata).filter(
+                models.TableMetadata.id == rel.parent_table_id
+            ).first()
+            child_table = db.query(models.TableMetadata).filter(
+                models.TableMetadata.id == rel.child_table_id
+            ).first()
+
+            if parent_table and child_table and rel.join_keys:
+                parent_col = rel.join_keys.get("parent_col")
+                child_col = rel.join_keys.get("child_col")
+                pt = parent_table.physical_table_name
+                ct = child_table.physical_table_name
+
+                if parent_col and child_col:
+                    # 子テーブルの総件数を取得する
+                    total = db.execute(sqlalchemy.text(
+                        f'SELECT COUNT(*) FROM "{ct}" WHERE "{child_col}" IS NOT NULL'
+                    )).scalar() or 0
+
+                    if total > 0:
+                        # 親テーブルにマッチする子テーブルの件数を取得する
+                        matched = db.execute(sqlalchemy.text(
+                            f'SELECT COUNT(*) FROM "{ct}" WHERE "{child_col}" IN '
+                            f'(SELECT "{parent_col}" FROM "{pt}")'
+                        )).scalar() or 0
+                        match_rate = round(matched / total * 100, 1)
+        except Exception:
+            # マッチ率の計算失敗は無視する（通常のリレーション情報は返す）
+            pass
+
+        result.append({
+            "id": rel.id,
+            "parent_table_id": rel.parent_table_id,
+            "child_table_id": rel.child_table_id,
+            "join_keys": rel.join_keys,
+            "cardinality": rel.cardinality,
+            "match_rate": match_rate,
+        })
+
+    return result

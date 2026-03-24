@@ -54,17 +54,17 @@ export default function RegisterPage() {
         <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
             {/* ロゴ */}
             <div className="flex items-center gap-2 mb-8">
-                <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-400 flex items-center justify-center">
                     <Cpu className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-xl font-bold text-foreground">分析くん</span>
             </div>
 
             {/* 登録カード */}
-            <Card className="w-full max-w-sm shadow-md">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-center">アカウント作成</CardTitle>
-                    <CardDescription className="text-center">新しいアカウントを登録してください</CardDescription>
+            <Card className="w-full max-w-sm" style={{ boxShadow: 'var(--shadow-lg)' }}>
+                <CardHeader className="pb-4">
+                    <CardTitle className="text-xl">アカウント作成</CardTitle>
+                    <CardDescription>新しいアカウントを登録してください</CardDescription>
                 </CardHeader>
                 <form onSubmit={handleSubmit}>
                     <CardContent className="space-y-4">

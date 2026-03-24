@@ -125,3 +125,103 @@ def download_prediction(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=prediction_{job_id[:8]}.csv"},
     )
+
+
+@router.get("/preview/{job_id}")
+def preview_prediction(
+    project_id: int,
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
+    """
+    予測結果の先頭20行と統計サマリーを返す
+    CSVダウンロード前にアプリ内でプレビューできるようにする
+    """
+    job = db.query(models.PredictionJob).filter(
+        models.PredictionJob.id == job_id,
+    ).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="予測ジョブが見つかりません")
+    if job.status != "completed":
+        raise HTTPException(status_code=400, detail="予測がまだ完了していません")
+    if not job.result_path or not os.path.exists(job.result_path):
+        raise HTTPException(status_code=500, detail="結果ファイルが見つかりません")
+
+    try:
+        import csv
+        rows = []
+        headers = []
+        # CSVを読み込む（先頭21行＝ヘッダー＋20件）
+        with open(job.result_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+            for i, row in enumerate(reader):
+                if i >= 20:
+                    break
+                rows.append(dict(row))
+
+        # predicted_value の統計サマリーを計算する（全行を読む）
+        predicted_values = []
+        with open(job.result_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    v = float(row.get("predicted_value", ""))
+                    predicted_values.append(v)
+                except (ValueError, TypeError):
+                    pass
+
+        summary = {}
+        if predicted_values:
+            summary = {
+                "min": min(predicted_values),
+                "max": max(predicted_values),
+                "mean": sum(predicted_values) / len(predicted_values),
+                "count": len(predicted_values),
+            }
+
+        return {
+            "headers": list(headers),
+            "rows": rows,
+            "summary": summary,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"プレビューの取得に失敗しました: {str(e)}")
+
+
+@router.get("/jobs", response_model=list[schemas.PredictionJobResponse])
+def list_prediction_jobs(
+    project_id: int,
+    config_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
+    """指定した分析設定の予測ジョブ一覧を取得する（新しい順）"""
+    jobs = db.query(models.PredictionJob).filter(
+        models.PredictionJob.config_id == config_id,
+    ).order_by(models.PredictionJob.created_at.desc()).limit(20).all()
+    return jobs
+
+
+@router.patch("/jobs/{job_id}", response_model=schemas.PredictionJobResponse)
+def rename_prediction_job(
+    project_id: int,
+    job_id: str,
+    body: schemas.PredictionJobRename,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
+    """予測ジョブの表示名を変更する"""
+    job = db.query(models.PredictionJob).filter(
+        models.PredictionJob.id == job_id,
+    ).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="予測ジョブが見つかりません")
+    job.name = body.name
+    db.commit()
+    db.refresh(job)
+    return job

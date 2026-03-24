@@ -1,5 +1,10 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(git -C /c/Work/Analyzer stash pop)",
+      "Bash(git -C /c/Work/Analyzer push origin main)",
+      "Bash(git:*)"
+    ],
     "defaultMode": "bypassPermissions"
   }
 }

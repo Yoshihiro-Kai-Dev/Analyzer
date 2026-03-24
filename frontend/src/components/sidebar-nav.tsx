@@ -2,11 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Database, GitMerge, Settings2, LayoutDashboard, Sparkles } from 'lucide-react';
+import { Database, GitMerge, Settings2, LayoutDashboard, Sparkles, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ナビゲーション項目の定義
-// step: サイドバーに表示するステップ番号バッジ
 const navItems = (projectId: string) => [
     {
         step: 1,
@@ -40,13 +39,19 @@ const navItems = (projectId: string) => [
     },
 ];
 
-export function SidebarNav({ projectId }: { projectId: string }) {
+interface SidebarNavProps {
+    projectId: string
+    completedSteps?: Set<number>
+}
+
+export function SidebarNav({ projectId, completedSteps = new Set() }: SidebarNavProps) {
     const pathname = usePathname();
 
     return (
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto scrollbar-thin">
             {navItems(projectId).map((item) => {
                 const isActive = pathname.startsWith(item.href);
+                const isCompleted = completedSteps.has(item.step);
                 const Icon = item.icon;
                 return (
                     <Link
@@ -55,37 +60,63 @@ export function SidebarNav({ projectId }: { projectId: string }) {
                         className={cn(
                             "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
                             isActive
-                                // アクティブ: 背景・テキスト色を強調し、左ボーダーで現在地を示す
-                                ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-2 border-primary pl-[10px]"
-                                : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 border-l-2 border-transparent pl-[10px]"
+                                // アクティブ状態: サイドバーアクセント背景 + 左ボーダー
+                                ? "border-l-2 pl-[10px]"
+                                : "border-l-2 border-transparent pl-[10px] hover:opacity-80"
                         )}
+                        style={isActive ? {
+                            backgroundColor: "var(--sidebar-accent)",
+                            color: "var(--sidebar-accent-foreground)",
+                            borderLeftColor: "var(--sidebar-primary)",
+                        } : {
+                            color: "var(--sidebar-foreground)",
+                            opacity: isActive ? 1 : undefined,
+                        }}
                     >
-                        {/* ステップ番号バッジ */}
-                        <span
-                            className={cn(
-                                "flex-shrink-0 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center transition-colors",
-                                isActive
-                                    ? "bg-primary text-white"
-                                    : "bg-slate-100 text-slate-400"
-                            )}
-                        >
-                            {item.step}
-                        </span>
+                        {/* ステップ番号バッジ / 完了チェックマーク */}
+                        {isCompleted && !isActive ? (
+                            <CheckCircle2
+                                className="flex-shrink-0 w-5 h-5"
+                                style={{ color: "hsl(151, 55%, 55%)" }}
+                            />
+                        ) : (
+                            <span
+                                className={cn(
+                                    "flex-shrink-0 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center transition-colors"
+                                )}
+                                style={isActive ? {
+                                    backgroundColor: "var(--sidebar-primary)",
+                                    color: "white",
+                                } : {
+                                    backgroundColor: "var(--sidebar-accent)",
+                                    color: "var(--sidebar-foreground)",
+                                    opacity: 0.7,
+                                }}
+                            >
+                                {item.step}
+                            </span>
+                        )}
 
                         {/* ナビゲーションアイコン */}
                         <Icon
-                            className={cn(
-                                "w-4 h-4 shrink-0 transition-colors",
-                                isActive ? "text-primary" : "text-slate-400"
-                            )}
+                            className="w-4 h-4 shrink-0 transition-colors"
+                            style={{ opacity: isActive ? 1 : 0.65 }}
                         />
 
                         {/* ナビゲーションラベル */}
-                        <span className="flex-1 truncate">{item.name}</span>
+                        <span
+                            className="flex-1 truncate"
+                            style={{ opacity: isActive ? 1 : 0.8 }}
+                        >
+                            {item.name}
+                        </span>
 
                         {/* アクティブ状態のインジケータードット */}
                         {isActive && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                            <div
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ backgroundColor: "var(--sidebar-primary)" }}
+                            />
                         )}
                     </Link>
                 );
