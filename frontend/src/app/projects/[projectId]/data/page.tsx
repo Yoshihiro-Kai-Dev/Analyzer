@@ -6,7 +6,7 @@ import { FileUpload } from "@/components/file-upload"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, ChevronDown, ChevronRight, ArrowRight, Database } from "lucide-react"
+import { Trash2, ChevronDown, ChevronRight, ArrowRight, Database, MoreHorizontal, Copy } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -15,6 +15,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from "recharts"
 import { AppAlertDialog } from "@/components/ui/app-alert-dialog"
 import { useAppAlert } from "@/hooks/use-app-alert"
 import { apiClient } from "@/lib/api"
@@ -54,6 +61,20 @@ export default function DataPage() {
 
     // アップロード完了後の次ステップ導線を表示するフラグ
     const [showNextStep, setShowNextStep] = useState(false)
+
+    // カラム詳細モーダルの状態
+    const [colStats, setColStats] = useState<any | null>(null)
+    const [colStatsLoading, setColStatsLoading] = useState(false)
+    const [statsCol, setStatsCol] = useState<{
+        name: string
+        type: string
+        colId: number
+        tableId: number
+        value_labels: Record<string, string> | null
+    } | null>(null)
+    const [statsOpen, setStatsOpen] = useState(false)
+    const [labelEdits, setLabelEdits] = useState<Record<string, string>>({})
+    const [labelSaving, setLabelSaving] = useState(false)
 
     const { alertState, showAlert, closeAlert } = useAppAlert()
 
@@ -124,23 +145,72 @@ export default function DataPage() {
         }
     }
 
+    // カラム詳細統計を取得してモーダルを開く
+    const handleColumnClick = async (tableId: number, col: any) => {
+        setStatsCol({
+            name: col.physical_name,
+            type: col.inferred_type,
+            colId: col.id,
+            tableId,
+            value_labels: col.value_labels ?? null,
+        })
+        setLabelEdits(col.value_labels ?? {})
+        setColStats(null)
+        setColStatsLoading(true)
+        setStatsOpen(true)
+        try {
+            const res = await apiClient.get(`/api/projects/${projectId}/tables/${tableId}/columns/${col.id}/stats`)
+            setColStats(res.data)
+        } catch {
+            setColStats({ error: true })
+        } finally {
+            setColStatsLoading(false)
+        }
+    }
+
+    // カテゴリ値ラベルを保存する
+    const handleSaveLabels = async () => {
+        if (!statsCol) return
+        setLabelSaving(true)
+        try {
+            await apiClient.patch(
+                `/api/projects/${projectId}/tables/${statsCol.tableId}/columns/${statsCol.colId}`,
+                { value_labels: labelEdits }
+            )
+            // テーブル一覧のカラム情報をローカルで更新する（再フェッチ不要）
+            setTables(prev => prev.map(t => t.id === statsCol.tableId ? {
+                ...t,
+                columns: t.columns.map((c: any) => c.id === statsCol.colId
+                    ? { ...c, value_labels: labelEdits }
+                    : c
+                )
+            } : t))
+            setStatsCol(prev => prev ? { ...prev, value_labels: labelEdits } : null)
+        } catch {
+            showAlert("保存エラー", "値ラベルの保存に失敗しました")
+        } finally {
+            setLabelSaving(false)
+        }
+    }
+
     // リレーション設定画面へ遷移する
     const handleGoToRelations = () => {
         router.push(`/projects/${projectId}/relations`)
     }
 
     return (
-        <div className="min-h-screen py-10 px-4">
-            <div className="container mx-auto">
-                <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">データアップロード</h1>
-                <p className="text-center text-gray-600 mb-8">分析に使用するCSVファイルをアップロードしてください。</p>
+        <div className="animate-fade-in">
+            <div className="mb-8">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">データ管理</h1>
+                <p className="text-muted-foreground mt-1">分析に使用するCSVファイルをアップロードしてください。</p>
+            </div>
 
                 {/* ファイルアップロードコンポーネント（アップロード完了後にテーブル一覧を再取得） */}
                 <FileUpload projectId={projectId} onUploadComplete={handleUploadComplete} />
 
                 {/* ── アップロード完了後の次ステップ導線 ── */}
                 {showNextStep && (
-                    <div className="w-full max-w-4xl mx-auto mt-6">
+                    <div className="mt-6">
                         <div className="bg-primary/10 border border-primary/30 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
                                 <p className="font-semibold text-primary text-base">型確認が完了しました</p>
@@ -172,18 +242,18 @@ export default function DataPage() {
                 )}
 
                 {/* ── アップロード済みテーブル一覧セクション ── */}
-                <div className="w-full max-w-4xl mx-auto mt-10">
+                <div className="mt-10">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-semibold text-gray-700">アップロード済みテーブル</h2>
+                        <h2 className="text-lg font-semibold text-foreground">アップロード済みテーブル</h2>
                         <Button variant="outline" size="sm" onClick={fetchTables} disabled={loadingTables}>
                             {loadingTables ? "読み込み中..." : "更新"}
                         </Button>
                     </div>
 
                     {loadingTables ? (
-                        <p className="text-gray-500 text-sm">テーブルを読み込んでいます...</p>
+                        <p className="text-muted-foreground text-sm">テーブルを読み込んでいます...</p>
                     ) : tables.length === 0 ? (
-                        <div className="border border-dashed border-gray-300 rounded-lg p-8 text-center text-gray-400 text-sm">
+                        <div className="border border-dashed border-border rounded-lg p-8 text-center text-muted-foreground text-sm">
                             アップロード済みのテーブルがありません。<br />
                             上のフォームからCSVファイルをアップロードしてください。
                         </div>
@@ -229,6 +299,36 @@ export default function DataPage() {
                                                     <Badge variant="outline" className="text-xs font-normal bg-white hidden sm:inline-flex">
                                                         {table.columns?.length ?? "?"} 列
                                                     </Badge>
+
+                                                    {/* テーブル操作ドロップダウン */}
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="text-muted-foreground hover:text-foreground"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <MoreHorizontal className="w-4 h-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation()
+                                                                    try {
+                                                                        await apiClient.post(`/api/projects/${projectId}/tables/${table.id}/copy`)
+                                                                        await fetchTables()
+                                                                    } catch {
+                                                                        showAlert("コピーエラー", "テーブルのコピーに失敗しました")
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Copy className="w-4 h-4 mr-2" />
+                                                                テーブルをコピー
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
 
                                                     {/* 削除ボタン */}
                                                     <Button
@@ -278,7 +378,8 @@ export default function DataPage() {
                                                         {table.columns.map((col: any) => (
                                                             <div
                                                                 key={col.id}
-                                                                className="flex items-center justify-between px-4 py-2.5 hover:bg-secondary/10 transition-colors"
+                                                                className="flex items-center justify-between px-4 py-2.5 hover:bg-secondary/10 transition-colors cursor-pointer"
+                                                                onClick={() => handleColumnClick(table.id, col)}
                                                             >
                                                                 <span className="text-sm font-medium font-mono text-foreground">
                                                                     {col.physical_name}
@@ -306,7 +407,6 @@ export default function DataPage() {
                         </div>
                     )}
                 </div>
-            </div>
 
             {/* テーブル削除確認ダイアログ */}
             <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
@@ -326,6 +426,123 @@ export default function DataPage() {
                             {deleting ? "削除中..." : "削除する"}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* カラム詳細統計モーダル */}
+            <Dialog open={statsOpen} onOpenChange={setStatsOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="font-mono text-base">{statsCol?.name}</DialogTitle>
+                        <DialogDescription>{typeLabel(statsCol?.type ?? '')}</DialogDescription>
+                    </DialogHeader>
+                    <div className="min-h-[200px]">
+                        {colStatsLoading ? (
+                            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">読み込み中...</div>
+                        ) : colStats?.error ? (
+                            <div className="flex items-center justify-center h-48 text-destructive text-sm">統計情報の取得に失敗しました</div>
+                        ) : colStats?.type === 'numeric' ? (
+                            <div className="space-y-4">
+                                {/* 基本統計量テーブル */}
+                                <div className="grid grid-cols-4 gap-3">
+                                    {[
+                                        { label: '最小値', value: colStats.min?.toLocaleString() },
+                                        { label: '最大値', value: colStats.max?.toLocaleString() },
+                                        { label: '平均', value: colStats.mean?.toFixed(2) },
+                                        { label: '標準偏差', value: colStats.std?.toFixed(2) },
+                                    ].map(({ label, value }) => (
+                                        <div key={label} className="bg-muted rounded-lg p-3 text-center">
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</p>
+                                            <p className="text-base font-bold font-mono text-foreground mt-1">{value ?? '—'}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                {/* ヒストグラム */}
+                                {colStats.histogram?.length > 0 && (
+                                    <div>
+                                        <p className="text-xs text-muted-foreground mb-2">分布</p>
+                                        <ResponsiveContainer width="100%" height={160}>
+                                            <BarChart data={colStats.histogram} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                                <XAxis dataKey="label" tick={{ fontSize: 9 }} />
+                                                <YAxis tick={{ fontSize: 10 }} />
+                                                <RechartsTooltip />
+                                                <Bar dataKey="count" fill="var(--primary)" radius={[3, 3, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </div>
+                        ) : colStats?.type === 'categorical' ? (
+                            <div className="space-y-4">
+                                {/* 値分布グラフ（既存のまま） */}
+                                <div>
+                                    <p className="text-xs text-muted-foreground mb-2">上位 {colStats.value_counts?.length} 件の値</p>
+                                    <ResponsiveContainer width="100%" height={Math.min(colStats.value_counts?.length * 28, 300)}>
+                                        <BarChart data={colStats.value_counts} layout="vertical" margin={{ top: 4, right: 40, left: 8, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                            <XAxis type="number" tick={{ fontSize: 10 }} />
+                                            <YAxis type="category" dataKey="value" tick={{ fontSize: 10 }} width={120} />
+                                            <RechartsTooltip />
+                                            <Bar dataKey="count" fill="var(--primary)" radius={[0, 3, 3, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* 値ラベル設定セクション（新規追加） */}
+                                <div className="border-t pt-4">
+                                    <p className="text-xs font-semibold text-foreground mb-1">値ラベル設定</p>
+                                    <p className="text-[11px] text-muted-foreground mb-3">
+                                        各値に表示名を設定します（例: 0 → 女児）。キーは数値文字列を使用してください。
+                                        設定したラベルはシミュレーションや予測プレビューで使用されます。
+                                    </p>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                        {colStats.value_counts?.map((vc: any) => (
+                                            <div key={vc.value} className="flex items-center gap-2">
+                                                <span className="text-xs font-mono text-muted-foreground w-24 shrink-0 truncate" title={vc.value}>
+                                                    {vc.value}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground">→</span>
+                                                <input
+                                                    type="text"
+                                                    placeholder="ラベル（例: 女児）"
+                                                    value={labelEdits[vc.value] ?? ''}
+                                                    onChange={(e) => setLabelEdits(prev => ({ ...prev, [vc.value]: e.target.value }))}
+                                                    className="flex-1 h-7 text-xs border border-border rounded px-2 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex justify-end mt-3">
+                                        <Button
+                                            size="sm"
+                                            onClick={handleSaveLabels}
+                                            disabled={labelSaving}
+                                            className="text-xs h-7"
+                                        >
+                                            {labelSaving ? '保存中...' : '保存'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : colStats?.type === 'datetime' || colStats?.monthly_counts ? (
+                            <div>
+                                <p className="text-xs text-muted-foreground mb-2">月別件数</p>
+                                <ResponsiveContainer width="100%" height={160}>
+                                    <LineChart data={colStats.monthly_counts} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                        <XAxis dataKey="month" tick={{ fontSize: 9 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <RechartsTooltip />
+                                        <Line type="monotone" dataKey="count" stroke="var(--primary)" strokeWidth={2} dot={false} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        ) : null}
+                    </div>
+                    <div className="text-xs text-muted-foreground text-right">
+                        総件数: {colStats?.total_count?.toLocaleString()} / 非NULL: {colStats?.non_null_count?.toLocaleString() ?? '—'}
+                    </div>
                 </DialogContent>
             </Dialog>
 
