@@ -173,19 +173,23 @@ export default function DataPage() {
         if (!statsCol) return
         setLabelSaving(true)
         try {
+            // 空文字ラベルをフィルタリングして不要なキーを除去する
+            const cleanedLabels = Object.fromEntries(
+                Object.entries(labelEdits).filter(([, v]) => v.trim() !== '')
+            )
             await apiClient.patch(
                 `/api/projects/${projectId}/tables/${statsCol.tableId}/columns/${statsCol.colId}`,
-                { value_labels: labelEdits }
+                { value_labels: cleanedLabels }
             )
             // テーブル一覧のカラム情報をローカルで更新する（再フェッチ不要）
             setTables(prev => prev.map(t => t.id === statsCol.tableId ? {
                 ...t,
                 columns: t.columns.map((c: any) => c.id === statsCol.colId
-                    ? { ...c, value_labels: labelEdits }
+                    ? { ...c, value_labels: cleanedLabels }
                     : c
                 )
             } : t))
-            setStatsCol(prev => prev ? { ...prev, value_labels: labelEdits } : null)
+            setStatsCol(prev => prev ? { ...prev, value_labels: cleanedLabels } : null)
         } catch {
             showAlert("保存エラー", "値ラベルの保存に失敗しました")
         } finally {
@@ -478,7 +482,7 @@ export default function DataPage() {
                                 {/* 値分布グラフ（既存のまま） */}
                                 <div>
                                     <p className="text-xs text-muted-foreground mb-2">上位 {colStats.value_counts?.length} 件の値</p>
-                                    <ResponsiveContainer width="100%" height={Math.min(colStats.value_counts?.length * 28, 300)}>
+                                    <ResponsiveContainer width="100%" height={Math.min((colStats.value_counts?.length ?? 0) * 28 || 56, 300)}>
                                         <BarChart data={colStats.value_counts} layout="vertical" margin={{ top: 4, right: 40, left: 8, bottom: 0 }}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                                             <XAxis type="number" tick={{ fontSize: 10 }} />
