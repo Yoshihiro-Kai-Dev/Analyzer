@@ -337,3 +337,22 @@
 .focus-ring {
   @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
 }
+
+/* ボタン共通アニメーション */
+.btn-motion {
+  box-shadow: 0 2px 8px hsl(var(--primary) / 0.35);
+  transition: all 0.15s ease;
+}
+.btn-motion:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px hsl(var(--primary) / 0.45);
+}
+.btn-motion:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: 0 1px 4px hsl(var(--primary) / 0.2);
+}
+.btn-motion:disabled,
+.btn-motion[disabled] {
+  transform: none;
+  box-shadow: none;
+}
