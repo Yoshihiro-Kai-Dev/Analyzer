@@ -6,7 +6,7 @@ import { FileUpload } from "@/components/file-upload"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CaretDown, CaretRight, Database, DotsThree, Copy, CircleNotch, Trash } from "@phosphor-icons/react"
+import { CaretDown, CaretRight, Database, DotsThree, Copy, CircleNotch, Trash, Tag } from "@phosphor-icons/react"
 import {
     Dialog,
     DialogContent,
@@ -25,6 +25,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { AppAlertDialog } from "@/components/ui/app-alert-dialog"
 import { useAppAlert } from "@/hooks/use-app-alert"
 import { apiClient } from "@/lib/api"
+import { LabelEditDialog } from "@/components/LabelEditDialog"
 
 // カラムの推論型ごとのバッジスタイルを返す
 const typeBadgeClass = (t: string) =>
@@ -74,6 +75,9 @@ export default function DataPage() {
     const [statsOpen, setStatsOpen] = useState(false)
     const [labelEdits, setLabelEdits] = useState<Record<string, string>>({})
     const [labelSaving, setLabelSaving] = useState(false)
+
+    // ラベル編集モーダルの対象テーブル（null なら閉じている）
+    const [labelEditTarget, setLabelEditTarget] = useState<{ id: number; original_filename: string; columns: any[] } | null>(null)
 
     const { alertState, showAlert, closeAlert } = useAppAlert()
 
@@ -283,6 +287,15 @@ export default function DataPage() {
                                                                 テーブルをコピー
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    setLabelEditTarget(table)
+                                                                }}
+                                                            >
+                                                                <Tag className="w-4 h-4 mr-2" weight="regular" />
+                                                                ラベル編集
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
                                                                 className="text-destructive focus:text-destructive focus:bg-destructive/10"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation()
@@ -399,6 +412,21 @@ export default function DataPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* ラベル編集モーダル */}
+            <LabelEditDialog
+                table={labelEditTarget}
+                projectId={projectId}
+                isOpen={!!labelEditTarget}
+                onClose={() => setLabelEditTarget(null)}
+                onSaved={(tableId, updatedColumns) => {
+                    // テーブル一覧をローカルで更新する（再フェッチ不要）
+                    setTables(prev =>
+                        prev.map(t => t.id === tableId ? { ...t, columns: updatedColumns } : t)
+                    )
+                    setLabelEditTarget(null)
+                }}
+            />
 
             {/* カラム詳細統計モーダル */}
             <Dialog open={statsOpen} onOpenChange={setStatsOpen}>
