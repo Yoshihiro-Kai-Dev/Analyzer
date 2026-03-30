@@ -87,8 +87,9 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
     <aside className="w-60 flex flex-col shrink-0" style={{ backgroundColor: "var(--sidebar)" }}>
 
       {/* ロゴエリア */}
-      <div
-        className="h-12 px-4 flex items-center gap-2.5 shrink-0"
+      <Link
+        href="/"
+        className="h-12 px-4 flex items-center gap-2.5 shrink-0 no-underline hover:opacity-80 transition-opacity"
         style={{ borderBottom: "1px solid var(--sidebar-border)" }}
       >
         <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-sm">
@@ -97,7 +98,7 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
         <span className="font-bold text-sm" style={{ color: "var(--sidebar-foreground)" }}>
           分析くん
         </span>
-      </div>
+      </Link>
 
       {/* プロジェクト情報エリア */}
       <div
