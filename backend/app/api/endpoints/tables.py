@@ -6,6 +6,7 @@ from app.db import models
 from app import schemas
 from app.core.deps import get_current_user
 import sqlalchemy
+import re
 
 router = APIRouter()
 
@@ -292,6 +293,10 @@ def get_label_suggestions(
         )
 
         if not matching_cols:
+            continue
+
+        # SQL インジェクション対策: physical_name に安全でない文字が含まれる場合はスキップする
+        if not re.match(r'^\w+$', col.physical_name):
             continue
 
         # 新テーブルの実データから NULL を除いた DISTINCT 値を取得する

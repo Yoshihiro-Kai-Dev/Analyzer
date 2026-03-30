@@ -110,8 +110,8 @@ export function LabelEditDialog({ table, projectId, isOpen, onClose, onSaved }: 
         setSaving(true)
         setSaveError(null)
         try {
-            // 各列を並列PATCHし、結果を収集する
-            const results = await Promise.all(
+            // 部分失敗を許容するため allSettled を使用する
+            const results = await Promise.allSettled(
                 changedColIds.map(async colId => {
                     // 空キーの行をフィルタリングして value_labels オブジェクトを構築する
                     const rows = (editState[colId] ?? []).filter(r => r.key.trim() !== "")
@@ -123,13 +123,25 @@ export function LabelEditDialog({ table, projectId, isOpen, onClose, onSaved }: 
                     return { colId, value_labels }
                 })
             )
-            // 全PATCH完了後にカラム配列を再構築する（競合状態を回避）
-            const labelMap = Object.fromEntries(results.map(r => [r.colId, r.value_labels]))
+            // 成功した列のみでカラム配列を再構築する
+            const labelMap: Record<number, Record<string, string>> = {}
+            const failedCount = results.filter(r => r.status === "rejected").length
+            results.forEach(r => {
+                if (r.status === "fulfilled") {
+                    labelMap[r.value.colId] = r.value.value_labels
+                }
+            })
             const updatedColumns = table.columns.map(c =>
                 labelMap[c.id] !== undefined ? { ...c, value_labels: labelMap[c.id] } : c
             )
+            if (failedCount > 0) {
+                setSaveError(`${failedCount} 件の保存に失敗しました。再度お試しください。`)
+            }
+            // 成功した列があれば onSaved を呼び出す
             onSaved(table.id, updatedColumns)
-            onClose()
+            if (failedCount === 0) {
+                onClose()
+            }
         } catch (err) {
             console.error("ラベル保存エラー:", err)
             setSaveError("保存に失敗しました。もう一度お試しください。")

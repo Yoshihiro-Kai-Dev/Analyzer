@@ -105,7 +105,7 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
         } catch {
             // 失敗時はサイレントスキップ（候補なし扱い）
             setLabelSuggestions([])
-            setLabelAccepted({})
+            // labelAccepted はリセットしない（ユーザーの選択を保持する）
         } finally {
             setSuggestionsLoading(false)
         }
@@ -375,9 +375,8 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                 {/* Type Review Step */}
                 {status === "type_review" && result && reviewColumns.length > 0 && (
                     <div className="space-y-4 pt-4 border-t">
-                        {/* ラベル候補がある場合のみ閾値入力を表示する（候補取得中も含む） */}
-                        {(suggestionsLoading || labelSuggestions.length > 0) && (
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {/* ラベル引き継ぎ候補の閾値入力 */}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <span>ラベル引き継ぎ候補の一致率閾値:</span>
                                 <input
                                     type="number"
@@ -385,7 +384,7 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                                     max={100}
                                     value={minOverlapRate}
                                     className="w-16 h-6 text-xs border border-input rounded px-1 text-center font-mono"
-                                    onChange={e => setMinOverlapRate(Number(e.target.value))}
+                                    onChange={e => setMinOverlapRate(Math.min(100, Math.max(1, Number(e.target.value))))}
                                     onBlur={e => {
                                         if (reviewTableId) fetchLabelSuggestions(reviewTableId, Number(e.target.value))
                                     }}
@@ -397,8 +396,7 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                                 />
                                 <span>% 以上</span>
                                 {suggestionsLoading && <span className="text-primary animate-pulse">取得中...</span>}
-                            </div>
-                        )}
+                        </div>
                         <div>
                             <h3 className="font-semibold text-sm text-gray-700 mb-1">カラム型の確認・修正</h3>
                             <p className="text-xs text-gray-500">自動推論された型を確認し、誤りがあれば修正してから「確定する」を押してください。</p>

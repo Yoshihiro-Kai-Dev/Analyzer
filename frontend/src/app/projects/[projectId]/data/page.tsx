@@ -424,7 +424,6 @@ export default function DataPage() {
                     setTables(prev =>
                         prev.map(t => t.id === tableId ? { ...t, columns: updatedColumns } : t)
                     )
-                    setLabelEditTarget(null)
                 }}
             />
 
