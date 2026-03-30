@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Cpu, BarChart2, Upload, Sparkles } from 'lucide-react'
+import { Cpu, ChartBar, UploadSimple, Sparkle } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -73,9 +73,9 @@ export default function LoginPage() {
                     {/* 3ステップ説明 */}
                     <div className="flex flex-col gap-4">
                         {[
-                            { icon: Upload, label: 'CSVをアップロード', desc: '複数テーブルの結合も可能' },
-                            { icon: BarChart2, label: 'AIが自動分析', desc: '特徴量エンジニアリングを自動提案' },
-                            { icon: Sparkles, label: '結果を即ダウンロード', desc: '予測結果CSVをそのまま活用' },
+                            { icon: UploadSimple, label: 'CSVをアップロード', desc: '複数テーブルの結合も可能' },
+                            { icon: ChartBar, label: 'AIが自動分析', desc: '特徴量エンジニアリングを自動提案' },
+                            { icon: Sparkle, label: '結果を即ダウンロード', desc: '予測結果CSVをそのまま活用' },
                         ].map(({ icon: Icon, label, desc }) => (
                             <div key={label} className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">

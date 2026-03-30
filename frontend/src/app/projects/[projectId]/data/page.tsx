@@ -6,8 +6,7 @@ import { FileUpload } from "@/components/file-upload"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ChevronDown, ChevronRight, Database, MoreHorizontal, Copy } from "lucide-react"
-import { CircleNotch, Trash } from "@phosphor-icons/react"
+import { CaretDown, CaretRight, Database, DotsThree, Copy, CircleNotch, Trash } from "@phosphor-icons/react"
 import {
     Dialog,
     DialogContent,
@@ -231,7 +230,7 @@ export default function DataPage() {
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     {/* テーブルアイコン */}
                                                     <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                        <Database className="w-5 h-5 text-primary" />
+                                                        <Database className="w-5 h-5 text-primary" weight="regular" />
                                                     </div>
                                                     <div className="min-w-0">
                                                         <CardTitle
@@ -265,7 +264,7 @@ export default function DataPage() {
                                                                 className="text-muted-foreground hover:text-foreground"
                                                                 onClick={(e) => e.stopPropagation()}
                                                             >
-                                                                <MoreHorizontal className="w-4 h-4" />
+                                                                <DotsThree className="w-4 h-4" weight="bold" />
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
@@ -280,7 +279,7 @@ export default function DataPage() {
                                                                     }
                                                                 }}
                                                             >
-                                                                <Copy className="w-4 h-4 mr-2" />
+                                                                <Copy className="w-4 h-4 mr-2" weight="regular" />
                                                                 テーブルをコピー
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem
@@ -305,8 +304,8 @@ export default function DataPage() {
 
                                                     {/* 展開・折りたたみアイコン */}
                                                     {isExpanded
-                                                        ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                                        : <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                                        ? <CaretDown className="w-4 h-4 text-muted-foreground" weight="bold" />
+                                                        : <CaretRight className="w-4 h-4 text-muted-foreground" weight="bold" />
                                                     }
                                                 </div>
                                             </div>

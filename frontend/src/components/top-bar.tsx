@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronRight, Home, Bell } from 'lucide-react';
+import { CaretRight, House, Bell } from '@phosphor-icons/react';
 import { getNotifications, markAllRead, getUnreadCount } from '@/lib/notifications';
 import type { Notification } from '@/lib/notifications';
 
@@ -50,11 +50,11 @@ export function TopBar({ projectId }: { projectId: string }) {
                     href="/"
                     className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                    <Home className="w-3.5 h-3.5" />
+                    <House className="w-3.5 h-3.5" weight="regular" />
                     <span className="hidden sm:inline">分析くん</span>
                 </Link>
 
-                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                <CaretRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" weight="bold" />
 
                 {/* プロジェクトID */}
                 <Link
@@ -67,7 +67,7 @@ export function TopBar({ projectId }: { projectId: string }) {
                 {/* 現在のセクション（最終パンくず） */}
                 {meta && (
                     <>
-                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                        <CaretRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" weight="bold" />
                         <span className="flex items-center gap-1.5 text-foreground font-medium">
                             {/* ステップ番号バッジ */}
                             <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-white text-[10px] font-bold shrink-0">
@@ -94,7 +94,7 @@ export function TopBar({ projectId }: { projectId: string }) {
                     className="relative p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                     aria-label="通知"
                 >
-                    <Bell className="w-4 h-4" />
+                    <Bell className="w-4 h-4" weight="regular" />
                     {unreadCount > 0 && (
                         <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center">
                             {unreadCount > 9 ? '9+' : unreadCount}

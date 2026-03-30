@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, Download, Play, CheckCircle2, XCircle, Loader2, History } from "lucide-react"
+import { UploadSimple, DownloadSimple, Play, CheckCircle, Warning, CircleNotch, ClockCounterClockwise, PencilSimple } from "@phosphor-icons/react"
 import { JobStatusCard, JobStatus } from "@/components/job-status-card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
@@ -217,7 +217,7 @@ export default function PredictPage() {
 
       {error && (
         <Alert variant="destructive">
-          <XCircle className="h-4 w-4" />
+          <Warning className="h-4 w-4" weight="fill" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -256,7 +256,7 @@ export default function PredictPage() {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="font-semibold text-sm text-foreground leading-tight">{config.name}</div>
                     {selectedConfigId === config.id && (
-                      <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                      <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" weight="fill" />
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -299,7 +299,7 @@ export default function PredictPage() {
                   : "border-border hover:border-primary/50 hover:bg-primary/3"
               }`}
             >
-              <Upload className={`h-8 w-8 mx-auto mb-2 transition-colors ${isDragOver ? "text-primary" : "text-muted-foreground"}`} />
+              <UploadSimple className={`h-8 w-8 mx-auto mb-2 transition-colors ${isDragOver ? "text-primary" : "text-muted-foreground"}`} weight="regular" />
               {file ? (
                 <div>
                   <p className="text-sm font-semibold text-foreground">{file.name}</p>
@@ -342,12 +342,12 @@ export default function PredictPage() {
                       >
                         {isRunning ? (
                           <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            <CircleNotch className="h-4 w-4 mr-2 animate-spin" weight="bold" />
                             予測中...
                           </>
                         ) : (
                           <>
-                            <Play className="h-4 w-4 mr-2" />
+                            <Play className="h-4 w-4 mr-2" weight="fill" />
                             予測実行
                           </>
                         )}
@@ -383,7 +383,7 @@ export default function PredictPage() {
             ) : currentJob.status === "completed" ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-success">
-                  <CheckCircle2 className="h-5 w-5" />
+                  <CheckCircle className="h-5 w-5" weight="fill" />
                   <span className="text-sm font-semibold">
                     予測完了 — {currentJob.row_count?.toLocaleString()} 件
                   </span>
@@ -469,7 +469,7 @@ export default function PredictPage() {
                     }
                   }}
                 >
-                  <Download className="h-4 w-4" />
+                  <DownloadSimple className="h-4 w-4" weight="regular" />
                   CSVダウンロード
                 </Button>
               </div>
@@ -491,7 +491,7 @@ export default function PredictPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <History className="w-4 h-4" />
+              <ClockCounterClockwise className="w-4 h-4" weight="regular" />
               予測履歴
             </CardTitle>
           </CardHeader>
@@ -535,7 +535,7 @@ export default function PredictPage() {
                           className="text-xs text-muted-foreground hover:text-foreground"
                           onClick={() => { setEditingJobId(j.id); setEditingName(j.name || '') }}
                         >
-                          ✏
+                          <PencilSimple className="w-3 h-3" weight="regular" />
                         </button>
                       </div>
                     )}
@@ -564,7 +564,7 @@ export default function PredictPage() {
                           } catch { setError('CSVのダウンロードに失敗しました') }
                         }}
                       >
-                        <Download className="w-3 h-3" />
+                        <DownloadSimple className="w-3 h-3" weight="regular" />
                         CSV
                       </Button>
                     )}
