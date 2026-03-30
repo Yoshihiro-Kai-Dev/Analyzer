@@ -69,7 +69,7 @@
 
   /* --- フォント --- */
   --font-sans: var(--font-biz-ud), 'BIZ UDPGothic', 'Hiragino Sans', system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
 
   /* --- 角丸スケール ---
      sm: ボタン・バッジ等の小要素
