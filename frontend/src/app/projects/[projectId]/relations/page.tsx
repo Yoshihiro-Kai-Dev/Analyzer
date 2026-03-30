@@ -276,7 +276,7 @@ export default function RelationsPage() {
     const { source, target, sourceColumn, targetColumn } = getPendingNodes();
 
     return (
-        <div className="w-full h-full flex flex-col">
+        <div className="w-full h-screen flex flex-col">
             <header className="p-4 border-b bg-background flex justify-between items-center shadow-sm z-10">
                 <div className="flex flex-col">
                     <h1 className="text-xl font-bold text-foreground">リレーション定義 (ER図)</h1>
@@ -285,6 +285,10 @@ export default function RelationsPage() {
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={fetchData} title="最新のテーブル情報を取得して配置をリセットします">
                         リロード & 自動配置
+                    </Button>
+                    <Button onClick={() => router.push(`/projects/${projectId}/analysis`)}>
+                        次のステップへ（分析設定）
+                        <ArrowRight className="w-4 h-4" weight="bold" />
                     </Button>
                 </div>
             </header>
@@ -316,13 +320,6 @@ export default function RelationsPage() {
                 )}
             </div>
 
-            {/* 次のステップへの誘導ボタン */}
-            <div className="flex justify-end px-4 py-3 border-t bg-background shrink-0">
-                <Button size="lg" onClick={() => router.push(`/projects/${projectId}/analysis`)}>
-                    次のステップへ（分析設定）
-                    <ArrowRight className="w-4 h-4 ml-1" weight="bold" />
-                </Button>
-            </div>
 
             <JoinConfigDialog
                 isOpen={isDialogOpen}
