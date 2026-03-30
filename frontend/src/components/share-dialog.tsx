@@ -157,7 +157,7 @@ export default function ShareDialog({ projectId, open, onClose }: ShareDialogPro
                                             className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
                                             title="メンバーを削除"
                                         >
-                                            <Trash className="w-4 h-4" />
+                                            <Trash className="w-4 h-4" weight="bold" />
                                         </button>
                                     )}
                                 </li>
@@ -194,7 +194,7 @@ export default function ShareDialog({ projectId, open, onClose }: ShareDialogPro
                         </Select>
                     </div>
                     <Button type="submit" size="sm" className="w-full" disabled={adding || !addUsername.trim()}>
-                        <UserPlus className="w-4 h-4 mr-1.5" />
+                        <UserPlus className="w-4 h-4 mr-1.5" weight="bold" />
                         {adding ? '追加中...' : 'メンバーを追加'}
                     </Button>
                 </form>

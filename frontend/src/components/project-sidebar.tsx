@@ -110,7 +110,7 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
           className="flex items-center gap-1.5 text-xs mb-2.5 transition-opacity hover:opacity-100 opacity-60"
           style={{ color: "var(--sidebar-foreground)" }}
         >
-          <ArrowLeft className="w-3 h-3" />
+          <ArrowLeft className="w-3 h-3" weight="bold" />
           プロジェクト一覧
         </Link>
 
@@ -165,7 +165,7 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
           style={{ color: "var(--sidebar-foreground)" }}
           title="ログアウト"
         >
-          <SignOut className="w-3.5 h-3.5" />
+          <SignOut className="w-3.5 h-3.5" weight="bold" />
         </button>
       </div>
     </aside>
