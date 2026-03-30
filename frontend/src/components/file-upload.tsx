@@ -367,7 +367,7 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                             </div>
                             <div>
                                 <p className="font-bold text-sm text-green-900">
-                                    {file?.name ?? "ファイル"} を登録しました
+                                    ✓ {file?.name ?? "ファイル"} を登録しました
                                 </p>
                                 <p className="text-xs text-green-700 mt-0.5">
                                     カラム型を確認済み
