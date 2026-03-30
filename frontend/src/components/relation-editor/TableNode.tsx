@@ -33,7 +33,13 @@ interface TableNodeProps {
 export function TableNode({ data }: TableNodeProps) {
     const [expanded, setExpanded] = useState(false);
 
-    const displayColumns = expanded ? data.columns : data.columns.slice(0, INITIAL_DISPLAY_COUNT);
+    // ID列を先頭に並べ替え
+    const sortedColumns = [...data.columns].sort((a, b) => {
+        if (a.inferred_type === 'id' && b.inferred_type !== 'id') return -1;
+        if (a.inferred_type !== 'id' && b.inferred_type === 'id') return 1;
+        return 0;
+    });
+    const displayColumns = expanded ? sortedColumns : sortedColumns.slice(0, INITIAL_DISPLAY_COUNT);
     const hiddenCount = data.columns.length - INITIAL_DISPLAY_COUNT;
 
     return (
