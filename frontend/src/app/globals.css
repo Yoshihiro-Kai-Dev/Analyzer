@@ -340,8 +340,7 @@
 
 /* ボタン共通アニメーション */
 .btn-motion {
-  box-shadow: 0 2px 8px hsl(var(--primary) / 0.35);
-  transition: all 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .btn-motion:hover {
   transform: translateY(-1px);
