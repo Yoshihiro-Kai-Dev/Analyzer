@@ -50,7 +50,32 @@ docker compose build frontend && docker compose up -d frontend
 ### 概要
 全タスクの基盤。カラートークンを変えるだけで、既存の shadcn コンポーネント（Card, Badge, Input 等）が自動的に Cozy Studio の色になる。
 
-- [ ] **Step 1: Phosphor Icons を package.json に追加**
+- [ ] **Step 1: BIZ UDPGothic フォントを layout.tsx に設定**
+
+`frontend/src/app/layout.tsx` を開き、既存の Geist フォント設定を BIZ UDPGothic に差し替える。
+
+```tsx
+import { BIZ_UDPGothic } from "next/font/google"
+
+const bizUDPGothic = BIZ_UDPGothic({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-biz-ud",
+  display: "swap",
+})
+```
+
+`<html>` タグの `className` を以下に変更:
+```tsx
+<html lang="ja" className={`${bizUDPGothic.variable}`}>
+```
+
+`globals.css` の `--font-sans` を差し替え:
+```css
+--font-sans: var(--font-biz-ud), 'BIZ UDPGothic', 'Hiragino Sans', system-ui, sans-serif;
+```
+
+- [ ] **Step 2: Phosphor Icons を package.json に追加**
 
 `frontend/package.json` の `dependencies` に以下を追記する（既存の `lucide-react` は残す）:
 ```json
