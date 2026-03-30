@@ -26,8 +26,10 @@
 ### 新規バックエンドエンドポイント
 
 ```
-GET /api/projects/{project_id}/tables/{table_id}/label-suggestions
+GET /api/projects/{project_id}/tables/{table_id}/label-suggestions?min_overlap_rate={int}
 ```
+
+- `min_overlap_rate`: 重複率の閾値（整数、0〜100）。省略時のデフォルトは **30**
 
 **処理フロー:**
 
@@ -35,7 +37,7 @@ GET /api/projects/{project_id}/tables/{table_id}/label-suggestions
 2. 同プロジェクト内の他テーブルから、**`physical_name`** が一致するカラムで `value_labels` が設定済みのものを検索（`display_name` ではなく `physical_name` で照合する）
 3. 新テーブルの実データ（PostgreSQL の物理テーブル）から `SELECT DISTINCT {physical_name} WHERE {physical_name} IS NOT NULL` で実値を取得
 4. 既存 `value_labels` のキーセットと実値の重複率を計算: `len(overlap) / len(new_values) * 100`（NULL除外後の値セットで計算）
-5. 重複率 ≥ 30% の候補のみを返す
+5. 重複率 ≥ `min_overlap_rate` の候補のみを返す
 6. 同名カラムの候補が複数ある場合は `overlap_rate` 降順で並べ、**先頭1件のみをフロントエンドが表示する**（複数候補から選ぶUIは対象外）
 
 **レスポンス形式:**
@@ -60,7 +62,7 @@ GET /api/projects/{project_id}/tables/{table_id}/label-suggestions
 
 - `column_name` は `physical_name` を返す
 - `suggestions` が複数ある場合（同名カラムが複数テーブルに存在）は `overlap_rate` 降順で並べる。フロントエンドは **先頭1件（index 0）のみを表示・採用対象とする**。複数候補の選択UIは対象外
-- 候補なし（同名カラムが存在しない、または全て重複率 < 30%）の場合は空配列 `[]` を返す
+- 候補なし（同名カラムが存在しない、または全て重複率 < `min_overlap_rate`）の場合は空配列 `[]` を返す
 
 ### 既存エンドポイント（変更なし）
 
@@ -100,11 +102,13 @@ const [labelSuggestions, setLabelSuggestions] = useState<LabelSuggestion[]>([]);
 const [labelAccepted, setLabelAccepted] = useState<Record<number, boolean>>({});
 // suggestions API のローディング状態（trueの間は確定ボタンを無効化）
 const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+// 重複率の閾値（デフォルト30）。変更時にAPIを再取得する
+const [minOverlapRate, setMinOverlapRate] = useState(30);
 ```
 
 ### UIフロー
 
-1. type_review フェーズに遷移した時点で `suggestionsLoading = true` にセットし、`GET .../label-suggestions` を呼び出す
+1. type_review フェーズに遷移した時点で `suggestionsLoading = true` にセットし、`GET .../label-suggestions?min_overlap_rate={minOverlapRate}` を呼び出す
 2. API完了（成功・失敗いずれも）後に `suggestionsLoading = false` にする。失敗時はサイレントスキップ（候補なし扱い）
 3. `suggestionsLoading === true` の間は「確定する」ボタンを `disabled` にする（競合状態を防ぐ）
 4. APIが候補を返した列にのみ、カラム行の直下に「ラベル引き継ぎ候補」セクションを表示。各列につき `suggestions[0]`（先頭1件）のみを表示する
@@ -118,6 +122,10 @@ const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 ### UIレイアウト（type_review 内）
 
 ```
+┌─────────────────────────────────────────────────┐
+│ ラベル引き継ぎ候補の一致率閾値: [30]% 以上       │  ← 数値入力（1〜100、変更でAPI再取得）
+└─────────────────────────────────────────────────┘
+
 ┌─────────────────────────────────────────────┐
 │ gender          [categorical ▾]             │
 │ ┌─ ラベル引き継ぎ候補 ──────────────────────┐ │
@@ -137,9 +145,10 @@ const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 └─────────────────────────────────────────────┘
 ```
 
+- 閾値入力欄はカラムリストの上部に配置。変更時に API を再取得し `labelAccepted` をリセットする
+- 閾値入力中の debounce は不要（`onBlur` または Enter キーで再取得）
 - 候補なし列: 従来通りの表示（変化なし）
 - value_labels のプレビューは最大5件表示し、それ以上は「他N件」と省略
-- ラベル数が多い場合の視認性を確保する
 
 ---
 
@@ -149,7 +158,7 @@ const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 ユーザー: CSVアップロード
     → upload_task 完了
     → type_review フェーズへ遷移
-    → GET /tables/{new_table_id}/label-suggestions
+    → GET /tables/{new_table_id}/label-suggestions?min_overlap_rate=30（デフォルト）
     → 候補があれば各カラム行の下に表示（デフォルト採用）
     → suggestionsLoading 中は「確定する」ボタン無効
     → suggestions API 完了後、ユーザーが必要に応じてスキップ
@@ -172,4 +181,3 @@ const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
 - プロジェクト横断でのラベル共有
 - 手動での value_labels 編集UI（現在も PATCH API は存在するが、専用UIなし）
-- 重複率の閾値をユーザーが設定可能にする
