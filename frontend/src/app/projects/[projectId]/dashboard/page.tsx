@@ -31,6 +31,7 @@ import { useAppAlert } from '@/hooks/use-app-alert';
 import { apiClient } from '@/lib/api'
 import { addNotification } from '@/lib/notifications'
 import { buildColLabelsMap, stripTablePrefix } from "@/lib/labelUtils"
+import { JobStatusCard, JobStatus } from "@/components/job-status-card"
 
 // ── 決定木ノードコンポーネント ────────────────────────────────
 const DT_NODE_W = 200;
@@ -223,6 +224,7 @@ export default function DashboardPage() {
     // キャンセル処理中フラグ
     const [cancelling, setCancelling] = useState(false);
     const pollingRef = useRef<NodeJS.Timeout | null>(null);
+    const resultRef = useRef<HTMLDivElement>(null);
     const { alertState, showAlert, closeAlert } = useAppAlert();
 
     // 過去の学習ジョブ一覧（completedのみ）
@@ -391,6 +393,17 @@ export default function DashboardPage() {
     // カラム物理名 → 値ラベル辞書のマップ（テーブル一覧から構築）
     const [colLabelsMap, setColLabelsMap] = useState<Record<string, Record<string, string>>>({})
 
+    // 学習結果のメトリクスを1行の文字列にまとめる（JobStatusCard用）
+    function buildMetricsLabel(res: any): string | null {
+        if (!res?.metrics) return null;
+        const parts: string[] = [];
+        if (res.metrics.r2 != null)       parts.push(`R² = ${res.metrics.r2.toFixed(3)}`);
+        if (res.metrics.rmse != null)     parts.push(`RMSE = ${res.metrics.rmse.toFixed(2)}`);
+        if (res.metrics.accuracy != null) parts.push(`Accuracy = ${(res.metrics.accuracy * 100).toFixed(1)}%`);
+        if (res.metrics.auc != null)      parts.push(`AUC = ${res.metrics.auc.toFixed(3)}`);
+        return parts.length > 0 ? parts.join("  |  ") : null;
+    }
+
     // 特徴量重要度グラフの高さをデータ件数に応じて動的に計算する（件数×28px、最小300px）
     const featureImportanceChartHeight = useMemo(() => {
         if (!result?.feature_importance) return 300;
@@ -517,31 +530,20 @@ export default function DashboardPage() {
 
             {/* Status Card */}
             {job && (
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-lg flex justify-between">
-                            ステータス: <span className={`font-semibold ${job.status === 'running' ? 'text-primary' :
-                                job.status === 'completed' ? 'text-primary' :
-                                    job.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
-                                }`}>{job.status === 'running' ? '実行中' : job.status === 'completed' ? '完了' : job.status === 'failed' ? '失敗' : job.status}</span>
-                        </CardTitle>
-                        <CardDescription>{job.message}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Progress value={job.progress} className="h-2" />
-                        {job.error_message && (
-                            <Alert variant="destructive" className="mt-4">
-                                <AlertTitle>学習エラー</AlertTitle>
-                                <AlertDescription>{job.error_message}</AlertDescription>
-                            </Alert>
-                        )}
-                    </CardContent>
-                </Card>
+                <JobStatusCard
+                    status={job.status as JobStatus}
+                    message={job.error_message ?? job.message ?? null}
+                    metricsLabel={job.status === "completed" ? buildMetricsLabel(result) : null}
+                    onCancel={job.status === "running" || job.status === "pending" ? cancelTraining : undefined}
+                    onRetry={job.status === "failed" ? () => startTraining() : undefined}
+                    onScrollToResult={job.status === "completed" ? () => resultRef.current?.scrollIntoView({ behavior: "smooth" }) : undefined}
+                    className="mb-6"
+                />
             )}
 
             {/* Result Section */}
             {result && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div ref={resultRef} className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
                     {/* AI Analysis Insight */}
                     {result.ai_analysis_text && (
