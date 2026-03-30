@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { CheckCircle2, ChevronRight, AlertCircle, Save, Trash2 } from 'lucide-react';
+import { CircleNotch } from '@phosphor-icons/react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import {
@@ -665,7 +666,7 @@ export default function AnalysisConfigPage() {
             </Card>
 
             {/* 分析設定削除確認ダイアログ */}
-            <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+            <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfigImpact({ count: 0, loading: false }) } }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>分析設定を削除しますか？</DialogTitle>
@@ -673,11 +674,16 @@ export default function AnalysisConfigPage() {
                             「{deleteTarget?.name}」を削除します。<br />
                             この操作は元に戻せません。
                         </DialogDescription>
-                        {deleteConfigImpact.count > 0 && !deleteConfigImpact.loading && (
+                        {deleteConfigImpact.loading ? (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                                <CircleNotch className="w-3 h-3 animate-spin" weight="bold" />
+                                影響を確認中...
+                            </p>
+                        ) : deleteConfigImpact.count > 0 ? (
                             <p className="text-sm text-destructive font-medium mt-1">
                                 この設定を削除すると、{deleteConfigImpact.count}件の学習ジョブも削除されます。
                             </p>
-                        )}
+                        ) : null}
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
