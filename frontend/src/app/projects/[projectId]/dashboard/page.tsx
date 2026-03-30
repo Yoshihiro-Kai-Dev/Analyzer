@@ -200,6 +200,17 @@ function getFeatureImportanceColor(index: number, total: number): string {
     return `rgb(${r},${g},${b})`;
 }
 
+// ── 学習結果のメトリクスを1行の文字列にまとめる（JobStatusCard用）────────
+function buildMetricsLabel(res: any): string | null {
+    if (!res?.metrics) return null;
+    const parts: string[] = [];
+    if (res.metrics.r2 != null)       parts.push(`R² = ${res.metrics.r2.toFixed(3)}`);
+    if (res.metrics.rmse != null)     parts.push(`RMSE = ${res.metrics.rmse.toFixed(2)}`);
+    if (res.metrics.accuracy != null) parts.push(`Accuracy = ${(res.metrics.accuracy * 100).toFixed(1)}%`);
+    if (res.metrics.auc != null)      parts.push(`AUC = ${res.metrics.auc.toFixed(3)}`);
+    return parts.length > 0 ? parts.join("  |  ") : null;
+}
+
 // ── 学習ジョブの型定義 ────────────────────────────────────────
 interface TrainJob {
     id: number;
@@ -393,17 +404,6 @@ export default function DashboardPage() {
     // カラム物理名 → 値ラベル辞書のマップ（テーブル一覧から構築）
     const [colLabelsMap, setColLabelsMap] = useState<Record<string, Record<string, string>>>({})
 
-    // 学習結果のメトリクスを1行の文字列にまとめる（JobStatusCard用）
-    function buildMetricsLabel(res: any): string | null {
-        if (!res?.metrics) return null;
-        const parts: string[] = [];
-        if (res.metrics.r2 != null)       parts.push(`R² = ${res.metrics.r2.toFixed(3)}`);
-        if (res.metrics.rmse != null)     parts.push(`RMSE = ${res.metrics.rmse.toFixed(2)}`);
-        if (res.metrics.accuracy != null) parts.push(`Accuracy = ${(res.metrics.accuracy * 100).toFixed(1)}%`);
-        if (res.metrics.auc != null)      parts.push(`AUC = ${res.metrics.auc.toFixed(3)}`);
-        return parts.length > 0 ? parts.join("  |  ") : null;
-    }
-
     // 特徴量重要度グラフの高さをデータ件数に応じて動的に計算する（件数×28px、最小300px）
     const featureImportanceChartHeight = useMemo(() => {
         if (!result?.feature_importance) return 300;
@@ -434,18 +434,7 @@ export default function DashboardPage() {
                         {job !== null && (job.status === "running" || job.status === "pending") ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
                         学習実行
                     </Button>
-                    {/* 学習中・待機中のときのみキャンセルボタンを表示 */}
-                    {job !== null && (job.status === "running" || job.status === "pending") && (
-                        <Button
-                            variant="outline"
-                            onClick={cancelTraining}
-                            disabled={cancelling}
-                            className="border-destructive text-destructive hover:bg-destructive/10"
-                        >
-                            {cancelling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XCircle className="w-4 h-4 mr-2" />}
-                            {cancelling ? "キャンセル中..." : "キャンセル"}
-                        </Button>
-                    )}
+
                 </div>
             </div>
 

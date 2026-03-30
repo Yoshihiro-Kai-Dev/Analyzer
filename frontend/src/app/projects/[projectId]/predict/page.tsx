@@ -458,7 +458,7 @@ export default function PredictPage() {
               <JobStatusCard
                 status={currentJob.status as JobStatus}
                 message={currentJob.error_message}
-                onRetry={currentJob.status === "failed" ? () => handleRun() : undefined}
+                onRetry={currentJob.status === "failed" ? handleRun : undefined}
                 className="mb-4"
               />
             )}
