@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Fragment } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,17 @@ import { Progress } from "@/components/ui/progress"
 import { CheckCircle, Circle, CircleNotch, Plus, ArrowRight } from "@phosphor-icons/react"
 import axios from "axios"
 import { apiClient } from '@/lib/api'
+import { toast } from "sonner"
+
+type LabelSuggestion = {
+    column_id: number
+    column_name: string  // physical_name
+    suggestions: {
+        source_table_name: string
+        value_labels: Record<string, string>
+        overlap_rate: number
+    }[]
+}
 
 interface FileUploadProps {
     projectId: string
@@ -35,6 +46,15 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
     const inputRef = useRef<HTMLInputElement>(null)
     const [resetKey, setResetKey] = useState(0)
 
+    // ラベル候補関連の状態
+    const [labelSuggestions, setLabelSuggestions] = useState<LabelSuggestion[]>([])
+    // column_id をキーとして候補を採用するかを管理（デフォルト true）
+    const [labelAccepted, setLabelAccepted] = useState<Record<number, boolean>>({})
+    // 候補取得中フラグ（true の間は「確定する」ボタンを無効化）
+    const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+    // 重複率閾値（デフォルト 30）
+    const [minOverlapRate, setMinOverlapRate] = useState(30)
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             // resetState() は setFile(null) を呼ぶため、先に選択ファイルを退避してから再セットする
@@ -51,6 +71,10 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
         setUploadProgress(0)
         setProcessingProgress(0)
         setProcessingMessage("")
+        setLabelSuggestions([])
+        setLabelAccepted({})
+        setSuggestionsLoading(false)
+        setMinOverlapRate(30)
         setReviewColumns([])
         setReviewTableId(null)
         if (pollingInterval.current) {
@@ -65,6 +89,28 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
         setFile(null)
     }
 
+    // type_review フェーズ突入時にラベル候補を取得する
+    const fetchLabelSuggestions = async (tableId: number, rate: number) => {
+        setSuggestionsLoading(true)
+        try {
+            const res = await apiClient.get(
+                `/api/projects/${projectId}/tables/${tableId}/label-suggestions?min_overlap_rate=${rate}`
+            )
+            const suggestions: LabelSuggestion[] = res.data
+            setLabelSuggestions(suggestions)
+            // 全候補をデフォルトで「採用する」に設定する
+            const accepted: Record<number, boolean> = {}
+            suggestions.forEach(s => { accepted[s.column_id] = true })
+            setLabelAccepted(accepted)
+        } catch {
+            // 失敗時はサイレントスキップ（候補なし扱い）
+            setLabelSuggestions([])
+            setLabelAccepted({})
+        } finally {
+            setSuggestionsLoading(false)
+        }
+    }
+
     const updateReviewColumnType = (columnId: number, newType: string) => {
         setReviewColumns(prev =>
             prev.map(col => col.id === columnId ? { ...col, inferred_type: newType } : col)
@@ -75,7 +121,28 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
         if (!reviewTableId) return
 
         try {
-            // 変更されたカラムのみPATCH
+            // 採用されたラベル候補を先に PATCH する
+            const acceptedSuggestions = labelSuggestions.filter(
+                s => labelAccepted[s.column_id] === true && s.suggestions.length > 0
+            )
+            if (acceptedSuggestions.length > 0) {
+                // ラベル PATCH の失敗は型確定フローを止めない（allSettled）
+                // 失敗があればトーストで通知する
+                const labelResults = await Promise.allSettled(
+                    acceptedSuggestions.map(s =>
+                        apiClient.patch(
+                            `/api/projects/${projectId}/tables/${reviewTableId}/columns/${s.column_id}`,
+                            { value_labels: s.suggestions[0].value_labels }
+                        )
+                    )
+                )
+                const failedCount = labelResults.filter(r => r.status === "rejected").length
+                if (failedCount > 0) {
+                    toast.warning(`${failedCount} 件のラベル引き継ぎに失敗しました。手動で設定してください。`)
+                }
+            }
+
+            // 変更されたカラム型のみ PATCH する
             const changedCols = reviewColumns.filter(col => col.inferred_type !== col.originalType)
             await Promise.all(
                 changedCols.map(col =>
@@ -204,6 +271,16 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
         }
     }, [])
 
+    // type_review フェーズ突入時（reviewTableId が設定された時点）にラベル候補を取得する
+    // minOverlapRate は意図的に依存配列から除外している（フェーズ突入時の初期値 30 を使用するため）
+    // 閾値変更後の再取得は onBlur/onKeyDown で明示的に行う
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        if (reviewTableId && status === "type_review") {
+            fetchLabelSuggestions(reviewTableId, minOverlapRate)
+        }
+    }, [reviewTableId, status])
+
     const typeLabel = (t: string) =>
         t === 'numeric' ? '数値' :
         t === 'categorical' ? 'カテゴリ' :
@@ -298,6 +375,30 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                 {/* Type Review Step */}
                 {status === "type_review" && result && reviewColumns.length > 0 && (
                     <div className="space-y-4 pt-4 border-t">
+                        {/* ラベル候補がある場合のみ閾値入力を表示する（候補取得中も含む） */}
+                        {(suggestionsLoading || labelSuggestions.length > 0) && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>ラベル引き継ぎ候補の一致率閾値:</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={100}
+                                    value={minOverlapRate}
+                                    className="w-16 h-6 text-xs border border-input rounded px-1 text-center font-mono"
+                                    onChange={e => setMinOverlapRate(Number(e.target.value))}
+                                    onBlur={() => {
+                                        if (reviewTableId) fetchLabelSuggestions(reviewTableId, minOverlapRate)
+                                    }}
+                                    onKeyDown={e => {
+                                        if (e.key === "Enter" && reviewTableId) {
+                                            fetchLabelSuggestions(reviewTableId, minOverlapRate)
+                                        }
+                                    }}
+                                />
+                                <span>% 以上</span>
+                                {suggestionsLoading && <span className="text-primary animate-pulse">取得中...</span>}
+                            </div>
+                        )}
                         <div>
                             <h3 className="font-semibold text-sm text-gray-700 mb-1">カラム型の確認・修正</h3>
                             <p className="text-xs text-gray-500">自動推論された型を確認し、誤りがあれば修正してから「確定する」を押してください。</p>
@@ -329,32 +430,92 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {reviewColumns.map((col: any) => (
-                                            <TableRow key={col.id}>
-                                                <TableCell className="font-medium">{col.physical_name}</TableCell>
-                                                <TableCell>{col.data_type}</TableCell>
-                                                <TableCell>
-                                                    <Select
-                                                        value={col.inferred_type}
-                                                        onValueChange={(val) => updateReviewColumnType(col.id, val)}
-                                                    >
-                                                        <SelectTrigger className="w-32 h-7 text-xs">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="numeric">数値</SelectItem>
-                                                            <SelectItem value="categorical">カテゴリ</SelectItem>
-                                                            <SelectItem value="datetime">日時</SelectItem>
-                                                            <SelectItem value="text">文字列</SelectItem>
-                                                            <SelectItem value="id">ユニークID</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </TableCell>
-                                                <TableCell className="text-gray-500 text-sm">
-                                                    {col.sample_values?.join(", ")}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                        {reviewColumns.map((col: any) => {
+                                            const suggestion = labelSuggestions.find(s => s.column_id === col.id)
+                                            // fetchLabelSuggestions で labelAccepted[col.id] = true を明示セット済みのため
+                                            // 候補がある列では undefined にならない。strict equality で統一する
+                                            const isAccepted = suggestion ? labelAccepted[col.id] === true : false
+                                            return (
+                                                // key は Fragment に付与する（内側の TableRow に付けても React に無視される）
+                                                <Fragment key={col.id}>
+                                                    <TableRow>
+                                                        <TableCell className="font-medium">{col.physical_name}</TableCell>
+                                                        <TableCell>{col.data_type}</TableCell>
+                                                        <TableCell>
+                                                            <Select
+                                                                value={col.inferred_type}
+                                                                onValueChange={(val) => updateReviewColumnType(col.id, val)}
+                                                            >
+                                                                <SelectTrigger className="w-32 h-7 text-xs">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="numeric">数値</SelectItem>
+                                                                    <SelectItem value="categorical">カテゴリ</SelectItem>
+                                                                    <SelectItem value="datetime">日時</SelectItem>
+                                                                    <SelectItem value="text">文字列</SelectItem>
+                                                                    <SelectItem value="id">ユニークID</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </TableCell>
+                                                        <TableCell className="text-gray-500 text-sm">
+                                                            {col.sample_values?.join(", ")}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                    {/* ラベル引き継ぎ候補行（categorical かつ候補がある場合のみ） */}
+                                                    {suggestion && suggestion.suggestions.length > 0 && (
+                                                        <TableRow className="bg-secondary/20 hover:bg-secondary/30">
+                                                            <TableCell colSpan={4} className="py-2 px-4">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <div className="text-xs text-muted-foreground">
+                                                                        <span className="font-medium text-foreground">ラベル引き継ぎ候補</span>
+                                                                        {" — "}
+                                                                        {suggestion.suggestions[0].source_table_name.replace(/\.csv$/i, "")} から
+                                                                        {" (一致率 "}
+                                                                        <span className="font-mono font-semibold">
+                                                                            {suggestion.suggestions[0].overlap_rate}%
+                                                                        </span>
+                                                                        {")"}
+                                                                        {" : "}
+                                                                        {Object.entries(suggestion.suggestions[0].value_labels)
+                                                                            .slice(0, 5)
+                                                                            .map(([k, v]) => `${k} → ${v}`)
+                                                                            .join(" / ")}
+                                                                        {Object.keys(suggestion.suggestions[0].value_labels).length > 5 && (
+                                                                            <span className="ml-1 text-muted-foreground">
+                                                                                他{Object.keys(suggestion.suggestions[0].value_labels).length - 5}件
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex gap-2 shrink-0">
+                                                                        <button
+                                                                            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                                                                                isAccepted
+                                                                                    ? "bg-primary text-primary-foreground border-primary"
+                                                                                    : "bg-background text-muted-foreground border-border hover:border-primary"
+                                                                            }`}
+                                                                            onClick={() => setLabelAccepted(prev => ({ ...prev, [col.id]: true }))}
+                                                                        >
+                                                                            この定義を使う{isAccepted ? " ✓" : ""}
+                                                                        </button>
+                                                                        <button
+                                                                            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                                                                                !isAccepted
+                                                                                    ? "bg-muted text-muted-foreground border-border"
+                                                                                    : "bg-background text-muted-foreground border-border hover:border-muted"
+                                                                            }`}
+                                                                            onClick={() => setLabelAccepted(prev => ({ ...prev, [col.id]: false }))}
+                                                                        >
+                                                                            スキップ
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </Fragment>
+                                            )
+                                        })}
                                     </TableBody>
                                 </Table>
                             </div>
@@ -402,8 +563,8 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
             </CardContent>
             <CardFooter>
                 {status === "type_review" ? (
-                    <Button onClick={handleConfirmTypes}>
-                        確定する
+                    <Button onClick={handleConfirmTypes} disabled={suggestionsLoading}>
+                        {suggestionsLoading ? "候補を取得中..." : "確定する"}
                     </Button>
                 ) : status !== "completed" ? (
                     <Button onClick={handleUpload} disabled={!file || status === "uploading" || status === "processing"}>
