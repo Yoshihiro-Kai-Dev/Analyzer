@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CaretRight, House, Bell } from '@phosphor-icons/react';
+import { CaretRight, House, Bell, BookOpen } from '@phosphor-icons/react';
 import { getNotifications, markAllRead, getUnreadCount } from '@/lib/notifications';
 import type { Notification } from '@/lib/notifications';
 
@@ -80,6 +80,18 @@ export function TopBar({ projectId }: { projectId: string }) {
             </nav>
 
             <div className="flex-1" />
+
+            {/* マニュアルリンク */}
+            <Link
+                href="/manual"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="マニュアルを開く"
+                title="マニュアル"
+            >
+                <BookOpen className="w-4 h-4" weight="regular" />
+            </Link>
 
             {/* 通知ベルボタン */}
             <div className="relative">

@@ -1,0 +1,552 @@
+"use client"
+
+import { useState, useEffect, useRef } from "react"
+import Link from "next/link"
+import {
+  ChartBar, UploadSimple, GitFork, Sliders, Brain, MagicWand,
+  BookOpen, CheckCircle, Warning, Lightbulb, Info, Question,
+  ArrowRight, Table, ChartBar as ChartBarIcon, ArrowLeft,
+  NumberCircleOne, NumberCircleTwo, NumberCircleThree,
+  NumberCircleFour, NumberCircleFive,
+} from "@phosphor-icons/react"
+
+// ────────────────────────────────────────────────────────────
+// サイドバーのセクション定義
+// ────────────────────────────────────────────────────────────
+const sections = [
+  { id: "intro",     label: "分析くんとは",         icon: BookOpen },
+  { id: "start",     label: "はじめる前に",          icon: Info },
+  { id: "step1",     label: "Step 1 データ管理",     icon: UploadSimple },
+  { id: "step2",     label: "Step 2 リレーション",   icon: GitFork },
+  { id: "step3",     label: "Step 3 分析設定",       icon: Sliders },
+  { id: "step4",     label: "Step 4 学習",           icon: Brain },
+  { id: "step5",     label: "Step 5 予測実行",       icon: MagicWand },
+  { id: "glossary",  label: "用語集",                icon: Table },
+  { id: "faq",       label: "よくある質問",          icon: Question },
+]
+
+// ────────────────────────────────────────────────────────────
+// 再利用コンポーネント
+// ────────────────────────────────────────────────────────────
+function Callout({ type, children }: { type: "tip" | "warn" | "info"; children: React.ReactNode }) {
+  const styles = {
+    tip:  { bg: "bg-emerald-50 border-emerald-300",  icon: <Lightbulb className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" weight="fill" />,  text: "text-emerald-800" },
+    warn: { bg: "bg-amber-50 border-amber-300",      icon: <Warning   className="w-4 h-4 text-amber-600  shrink-0 mt-0.5" weight="fill" />,    text: "text-amber-800" },
+    info: { bg: "bg-blue-50 border-blue-300",        icon: <Info      className="w-4 h-4 text-blue-600   shrink-0 mt-0.5" weight="fill" />,     text: "text-blue-800" },
+  }
+  const s = styles[type]
+  return (
+    <div className={`flex gap-2.5 rounded-lg border px-4 py-3 my-4 ${s.bg}`}>
+      {s.icon}
+      <p className={`text-sm leading-relaxed ${s.text}`}>{children}</p>
+    </div>
+  )
+}
+
+function StepHeader({ num, title, color }: { num: number; title: string; color: string }) {
+  const icons = [NumberCircleOne, NumberCircleTwo, NumberCircleThree, NumberCircleFour, NumberCircleFive]
+  const Icon = icons[num - 1]
+  return (
+    <div className={`flex items-center gap-3 px-5 py-4 rounded-xl mb-6 ${color}`}>
+      <Icon className="w-8 h-8 shrink-0" weight="fill" />
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest opacity-70">Step {num}</p>
+        <h2 className="text-xl font-bold">{title}</h2>
+      </div>
+    </div>
+  )
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="text-base font-bold text-foreground mt-8 mb-3 flex items-center gap-2">{children}</h3>
+}
+
+function NiceTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border my-4">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-muted">
+            {headers.map((h) => (
+              <th key={h} className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wide border-b border-border">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+              {row.map((cell, j) => (
+                <td key={j} className="px-4 py-2.5 text-foreground">{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function FaqItem({ q, children }: { q: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="border border-border rounded-xl overflow-hidden mb-3">
+      <button
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/40 transition-colors gap-4"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="font-medium text-sm text-foreground">{q}</span>
+        <span className={`text-muted-foreground transition-transform shrink-0 ${open ? "rotate-45" : ""}`}>＋</span>
+      </button>
+      {open && (
+        <div className="px-5 pb-4 pt-1 text-sm text-muted-foreground leading-relaxed border-t border-border bg-muted/20">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// メインページ
+// ────────────────────────────────────────────────────────────
+export default function ManualPage() {
+  const [activeSection, setActiveSection] = useState("intro")
+  const observerRef = useRef<IntersectionObserver | null>(null)
+
+  // スクロールスパイ: 表示中のセクションをサイドバーでハイライト
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) setActiveSection(entry.target.id)
+        })
+      },
+      { rootMargin: "-20% 0px -70% 0px" }
+    )
+    sections.forEach(({ id }) => {
+      const el = document.getElementById(id)
+      if (el) observerRef.current?.observe(el)
+    })
+    return () => observerRef.current?.disconnect()
+  }, [])
+
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  return (
+    <div className="min-h-screen bg-background" style={{ fontFamily: "var(--font-biz-ud, sans-serif)" }}>
+      {/* ── ヘッダー ────────────────────────────────── */}
+      <header className="sticky top-0 z-40 h-12 border-b border-border bg-white/90 backdrop-blur-sm flex items-center px-6 gap-3">
+        <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-sm shrink-0">
+          <ChartBar className="w-4 h-4 text-primary-foreground" weight="bold" />
+        </div>
+        <span className="font-bold text-sm text-foreground">分析くん</span>
+        <span className="text-muted-foreground/40 text-sm mx-1">/</span>
+        <span className="text-sm text-muted-foreground font-medium">利用マニュアル</span>
+        <div className="flex-1" />
+        <Link href="/" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
+          <ArrowLeft className="w-3.5 h-3.5" weight="bold" />
+          アプリに戻る
+        </Link>
+      </header>
+
+      <div className="flex max-w-7xl mx-auto">
+        {/* ── サイドバー ───────────────────────────── */}
+        <aside className="w-56 shrink-0 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto py-6 px-3 hidden md:block">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-3 mb-2">目次</p>
+          <nav className="space-y-0.5">
+            {sections.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => scrollTo(id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition-all ${
+                  activeSection === id
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Icon className="w-4 h-4 shrink-0" weight={activeSection === id ? "fill" : "regular"} />
+                <span className="leading-tight">{label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        {/* ── メインコンテンツ ─────────────────────── */}
+        <main className="flex-1 min-w-0 px-6 md:px-10 py-10 space-y-16">
+
+          {/* ═══ はじめに ═══ */}
+          <section id="intro">
+            <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl px-8 py-10 mb-8 border border-primary/20">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow">
+                  <ChartBar className="w-6 h-6 text-white" weight="bold" />
+                </div>
+                <h1 className="text-3xl font-bold text-foreground">分析くん</h1>
+              </div>
+              <p className="text-muted-foreground text-base leading-relaxed max-w-xl">
+                CSVファイルをアップロードするだけで、機械学習モデルの学習・評価・予測ができるノーコードツールです。
+                プログラムを書く必要はありません。
+              </p>
+            </div>
+
+            <SectionTitle><ChartBarIcon className="w-4 h-4 text-primary" weight="fill" />できること</SectionTitle>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                { icon: UploadSimple, title: "データ管理",     desc: "CSVを取り込み、カラムの型や値ラベルを整理",   color: "text-violet-600 bg-violet-50" },
+                { icon: GitFork,      title: "リレーション",   desc: "複数CSVをキーで結合して分析に活用",            color: "text-blue-600 bg-blue-50" },
+                { icon: Sliders,      title: "分析設定",       desc: "何を予測するか・どのAIを使うかを設定",         color: "text-cyan-600 bg-cyan-50" },
+                { icon: Brain,        title: "学習",           desc: "AIモデルを自動作成して精度を確認",             color: "text-emerald-600 bg-emerald-50" },
+                { icon: MagicWand,    title: "予測実行",       desc: "新しいデータをAIに入力して予測値を取得",       color: "text-orange-600 bg-orange-50" },
+              ].map(({ icon: Icon, title, desc, color }) => (
+                <div key={title} className="border border-border rounded-xl p-4 hover:shadow-sm transition-shadow bg-card">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${color}`}>
+                    <Icon className="w-4 h-4" weight="fill" />
+                  </div>
+                  <p className="font-semibold text-sm text-foreground mb-1">{title}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <SectionTitle>対応モデル</SectionTitle>
+            <NiceTable
+              headers={["モデル名", "タスク", "向いているケース"]}
+              rows={[
+                ["LightGBM（勾配ブースティング）", "回帰・分類",   "精度重視。複雑なパターンを自動で学習"],
+                ["線形回帰",                       "回帰",        "数値を予測。シンプルで説明しやすい"],
+                ["ロジスティック回帰",             "分類",        "2択の判定。シンプルで説明しやすい"],
+              ]}
+            />
+          </section>
+
+          {/* ═══ はじめる前に ═══ */}
+          <section id="start">
+            <h2 className="text-2xl font-bold text-foreground mb-6 pb-2 border-b border-border">はじめる前に知っておきたいこと</h2>
+
+            <SectionTitle>データ形式</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-2">
+              取り込めるファイルは <strong className="text-foreground">.csv ファイルのみ</strong>です。
+              Excelファイル（.xlsx）の場合は「名前を付けて保存」でCSV形式に変換してください。
+            </p>
+            <Callout type="info">
+              CSVの1行目はカラム名（ヘッダー行）として認識されます。ヘッダーがないCSVは取り込めません。
+            </Callout>
+
+            <SectionTitle>用語の整理</SectionTitle>
+            <NiceTable
+              headers={["用語", "意味", "例"]}
+              rows={[
+                ["目的変数",       "予測したい値",         "売上金額、虐待リスク、購入有無"],
+                ["説明変数（特徴量）", "予測に使う入力値",  "年齢、地域コード、過去の購入回数"],
+                ["学習（トレーニング）", "データからAIモデルを作ること", "—"],
+                ["予測（推論）",   "学習済みAIで新規データの答えを推定すること", "—"],
+              ]}
+            />
+
+            <SectionTitle>5ステップの流れ</SectionTitle>
+            <div className="flex flex-col sm:flex-row items-stretch gap-0 my-4">
+              {[
+                { step: "1", label: "データ管理",   color: "bg-violet-100 text-violet-700 border-violet-200" },
+                { step: "2", label: "リレーション", color: "bg-blue-100 text-blue-700 border-blue-200" },
+                { step: "3", label: "分析設定",     color: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+                { step: "4", label: "学習",         color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                { step: "5", label: "予測実行",     color: "bg-orange-100 text-orange-700 border-orange-200" },
+              ].map(({ step, label, color }, i, arr) => (
+                <div key={step} className="flex sm:flex-col items-center">
+                  <div className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border font-semibold text-sm ${color} flex-1 sm:flex-none sm:w-28 sm:h-16`}>
+                    <span className="text-xs opacity-70">Step {step}</span>
+                    <span className="text-xs font-bold">{label}</span>
+                  </div>
+                  {i < arr.length - 1 && (
+                    <ArrowRight className="w-4 h-4 text-muted-foreground/40 shrink-0 mx-1 sm:mx-0 sm:my-1 sm:rotate-90" weight="bold" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* ═══ Step 1 ═══ */}
+          <section id="step1">
+            <StepHeader num={1} title="データ管理" color="bg-violet-50 text-violet-800 border border-violet-200" />
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              CSVファイルをアップロードしてアプリのデータベースに取り込みます。アップロードしたデータは以降のステップで使用されます。
+            </p>
+
+            <SectionTitle><NumberCircleOne className="w-4 h-4 text-violet-600" weight="fill" />CSVをアップロードする</SectionTitle>
+            <ol className="space-y-2 text-sm text-muted-foreground pl-1">
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" weight="fill" /><span>左サイドバーの <strong className="text-foreground">「1 データ管理」</strong> をクリック</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" weight="fill" /><span>アップロードエリアにCSVをドラッグ&amp;ドロップ、またはクリックしてファイルを選択</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" weight="fill" /><span>アップロードが完了するとテーブル一覧に追加されます</span></li>
+            </ol>
+            <Callout type="tip">複数のCSVをアップロードできます。「説明変数テーブル」と「目的変数テーブル」を別々にアップロードして、Step 2でつなぐ使い方もできます。</Callout>
+
+            <SectionTitle><NumberCircleTwo className="w-4 h-4 text-violet-600" weight="fill" />カラムの型を確認・修正する</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">アップロード時にカラムの型が自動推論されます。誤っている場合はドロップダウンから修正してください。</p>
+            <NiceTable
+              headers={["型名", "意味", "例"]}
+              rows={[
+                ["numeric（数値）",      "計算できる連続値",              "年齢、金額、点数"],
+                ["categorical（カテゴリ）", "種類や区分を表す値",          "性別（男/女）、地域コード"],
+                ["id（ID）",             "レコードを一意に識別する値",    "顧客ID、児童ID"],
+                ["datetime（日時）",     "日付・時刻",                   "2024-01-01、登録日"],
+                ["text（テキスト）",     "自由記述など",                  "メモ欄"],
+              ]}
+            />
+            <Callout type="info">
+              整数型のカラムは、ユニーク値が少ない場合（デフォルト：20種類以下）は自動で「categorical」と判定されます。閾値はアップロード画面で変更できます。
+            </Callout>
+
+            <SectionTitle><NumberCircleThree className="w-4 h-4 text-violet-600" weight="fill" />値ラベルを設定する（任意）</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              コード値（0, 1など）に人間が読める名前を付けられます。設定すると予測結果の画面で「0→低リスク」のように表示されます。
+            </p>
+            <Callout type="tip">
+              同じプロジェクト内の別テーブルに同名カラムがあり、ラベルが設定済みの場合は「この定義を使う」ボタンで引き継げます。
+            </Callout>
+          </section>
+
+          {/* ═══ Step 2 ═══ */}
+          <section id="step2">
+            <StepHeader num={2} title="リレーション設定" color="bg-blue-50 text-blue-800 border border-blue-200" />
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              複数のCSVを「キー」でつなぐ設定です。<strong className="text-foreground">CSVが1つだけの場合はスキップできます。</strong>
+            </p>
+
+            <SectionTitle>リレーションの種類</SectionTitle>
+            <NiceTable
+              headers={["種類", "意味", "例"]}
+              rows={[
+                ["1対多（OneToMany）", "親1件に対して子が複数件ある",    "顧客1人に対して購入履歴が複数件"],
+                ["1対1（OneToOne）",   "互いに1件ずつ対応する",          "説明変数テーブルと目的変数テーブル"],
+              ]}
+            />
+
+            <SectionTitle>設定手順</SectionTitle>
+            <ol className="space-y-2 text-sm text-muted-foreground pl-1">
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" weight="fill" /><span>左サイドバーの <strong className="text-foreground">「2 リレーション設定」</strong> をクリック</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" weight="fill" /><span>テーブルのノード（箱）が表示される。結合したいカラムのハンドル（◯）をドラッグしてもう一方のテーブルにつなぐ</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" weight="fill" /><span>ダイアログで結合キーとなるカラムを選択して「保存」</span></li>
+            </ol>
+            <Callout type="warn">
+              結合キーは両テーブルに同じ値が入っているカラムを選んでください。一致率が70%未満の場合はオレンジ色の警告が表示されます。
+            </Callout>
+          </section>
+
+          {/* ═══ Step 3 ═══ */}
+          <section id="step3">
+            <StepHeader num={3} title="分析設定" color="bg-cyan-50 text-cyan-800 border border-cyan-200" />
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              「何を予測したいか」「どのAIモデルを使うか」をウィザード形式（3ステップ）で設定します。
+            </p>
+
+            <SectionTitle><NumberCircleOne className="w-4 h-4 text-cyan-600" weight="fill" />設定名とメインテーブルを選ぶ</SectionTitle>
+            <ul className="space-y-1.5 text-sm text-muted-foreground">
+              <li className="flex gap-2"><ArrowRight className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" weight="bold" /><span><strong className="text-foreground">設定名</strong>：後から識別できるわかりやすい名前を入力（例：「虐待リスク予測 線形モデル」）</span></li>
+              <li className="flex gap-2"><ArrowRight className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" weight="bold" /><span><strong className="text-foreground">メインテーブル</strong>：特徴量（説明変数）が入っているCSVを選択</span></li>
+            </ul>
+
+            <SectionTitle><NumberCircleTwo className="w-4 h-4 text-cyan-600" weight="fill" />目的変数とモデルを選ぶ</SectionTitle>
+            <ul className="space-y-1.5 text-sm text-muted-foreground mb-4">
+              <li className="flex gap-2"><ArrowRight className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" weight="bold" /><span><strong className="text-foreground">目的変数</strong>：予測したいカラムを選択する（AIが学習する「答え」）</span></li>
+              <li className="flex gap-2"><ArrowRight className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" weight="bold" /><span>タスクタイプが自動設定される（数値→回帰、カテゴリ→分類）。手動で切り替えも可能</span></li>
+            </ul>
+            <NiceTable
+              headers={["モデル", "おすすめの状況"]}
+              rows={[
+                ["LightGBM",         "精度を最大化したい。データが多い（数千件以上）。変数間の関係が複雑"],
+                ["線形回帰",         "結果を説明したい（係数で影響度確認）。数値を予測するタスク"],
+                ["ロジスティック回帰", "結果を説明したい。2択の分類タスク（リスクあり/なし等）"],
+              ]}
+            />
+
+            <SectionTitle><NumberCircleThree className="w-4 h-4 text-cyan-600" weight="fill" />特徴量（説明変数）を選ぶ</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              予測に使うカラムにチェックを入れます。リレーション定義に基づいて候補が自動提案されます。
+            </p>
+            <Callout type="tip">よくわからない場合は全チェックのまま学習してみましょう。Step 4で「特徴量重要度」を確認して、重要度の低いカラムを外して再学習することができます。</Callout>
+          </section>
+
+          {/* ═══ Step 4 ═══ */}
+          <section id="step4">
+            <StepHeader num={4} title="学習とダッシュボード" color="bg-emerald-50 text-emerald-800 border border-emerald-200" />
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              設定した内容でAIモデルを学習させ、精度や特徴量の重要度を確認します。
+            </p>
+
+            <SectionTitle><NumberCircleOne className="w-4 h-4 text-emerald-600" weight="fill" />学習を実行する</SectionTitle>
+            <ol className="space-y-2 text-sm text-muted-foreground pl-1">
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" weight="fill" /><span>左サイドバーの <strong className="text-foreground">「4 ダッシュボード」</strong> をクリック</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" weight="fill" /><span>画面上部のドロップダウンから分析設定を選択して「<strong className="text-foreground">学習実行</strong>」をクリック</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" weight="fill" /><span>完了するとメッセージが表示され、結果が自動表示される（数秒〜数分）</span></li>
+            </ol>
+            <Callout type="info">学習はバックグラウンドで実行されます。他のページを操作していても学習は継続されます。</Callout>
+
+            <SectionTitle><NumberCircleTwo className="w-4 h-4 text-emerald-600" weight="fill" />評価指標の読み方</SectionTitle>
+            <p className="text-sm font-medium text-foreground mt-3 mb-2">▶ 回帰（数値予測）</p>
+            <NiceTable
+              headers={["指標", "読み方", "目安"]}
+              rows={[
+                ["RMSE", "予測値と実際値の平均的なズレ（大きな外れほど重くカウント）", "小さいほど良い"],
+                ["MAE",  "予測値と実際値の平均的なズレ（外れ値に強い）",              "小さいほど良い"],
+                ["R²（決定係数）", "予測のあてはまり度（0〜1）",                       "0.7以上で良好、0.9以上で優秀"],
+              ]}
+            />
+            <p className="text-sm font-medium text-foreground mt-4 mb-2">▶ 分類（2択判定など）</p>
+            <NiceTable
+              headers={["指標", "読み方", "目安"]}
+              rows={[
+                ["Accuracy（正解率）", "全体のうち正しく分類できた割合（0〜1）",             "0.8以上で良好"],
+                ["AUC",              "正例と負例を区別する能力（0.5〜1.0）",                "0.8以上で良好。0.5はランダムと同等"],
+              ]}
+            />
+
+            <SectionTitle><NumberCircleThree className="w-4 h-4 text-emerald-600" weight="fill" />特徴量重要度の確認</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              横棒グラフで「どのカラムが予測に役立っているか」を確認できます。棒が長いほど重要です。
+              重要度が低いカラムはStep 3に戻って外し、再学習するとモデルをシンプルにできます。
+            </p>
+
+            <SectionTitle><NumberCircleFour className="w-4 h-4 text-emerald-600" weight="fill" />係数情報（線形モデルのみ）</SectionTitle>
+            <NiceTable
+              headers={["マーク", "意味"]}
+              rows={[
+                ["***", "非常に有意（p値 < 0.001）：このカラムは確実に影響している"],
+                ["**",  "有意（p値 < 0.01）"],
+                ["*",   "やや有意（p値 < 0.05）"],
+                ["n.s.", "有意でない：偶然の可能性あり（参考程度）"],
+              ]}
+            />
+          </section>
+
+          {/* ═══ Step 5 ═══ */}
+          <section id="step5">
+            <StepHeader num={5} title="予測実行" color="bg-orange-50 text-orange-800 border border-orange-200" />
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              学習済みのAIモデルを使って新しいデータの予測値を算出します。
+            </p>
+
+            <SectionTitle><NumberCircleOne className="w-4 h-4 text-orange-600" weight="fill" />予測用CSVの準備</SectionTitle>
+            <ul className="space-y-1.5 text-sm text-muted-foreground mb-3">
+              <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>学習時に使った<strong className="text-foreground">特徴量（説明変数）のカラム名をすべて含む</strong>こと</span></li>
+              <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>カラム名は学習時のCSVと<strong className="text-foreground">完全に一致</strong>していること（大文字小文字・スペース含む）</span></li>
+              <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>目的変数のカラムは含まれていなくてかまいません（含まれていても自動除外されます）</span></li>
+            </ul>
+            <Callout type="warn">
+              学習後に分析設定を変更した場合は、変更後の分析設定で<strong>再学習</strong>してから予測を実行してください。古いモデルでは正しい結果が得られません。
+            </Callout>
+
+            <SectionTitle><NumberCircleTwo className="w-4 h-4 text-orange-600" weight="fill" />予測の実行手順</SectionTitle>
+            <ol className="space-y-2 text-sm text-muted-foreground pl-1">
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>左サイドバーの <strong className="text-foreground">「5 予測実行」</strong> をクリック</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>使用したい <strong className="text-foreground">分析設定（学習済みモデル）</strong> を選択</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>予測用CSVをドラッグ&amp;ドロップ または クリックして選択</span></li>
+              <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>「<strong className="text-foreground">予測実行</strong>」ボタンをクリック → 完了したらCSVをダウンロード</span></li>
+            </ol>
+
+            <SectionTitle><NumberCircleThree className="w-4 h-4 text-orange-600" weight="fill" />予測結果CSVの見方</SectionTitle>
+            <NiceTable
+              headers={["カラム名", "説明"]}
+              rows={[
+                ["（ID列）",              "アップロードCSVのIDカラム（設定済みの場合に自動付加）"],
+                ["row_index",             "アップロードCSVの行番号（0始まり）"],
+                ["predicted_value",       "AIによる予測値。回帰=数値、分類=陽性クラスの確率（0〜1）"],
+                ["rank_small_to_large",   "predicted_valueの昇順ランク（値が小さいほど順位が高い）"],
+                ["rank_large_to_small",   "predicted_valueの降順ランク（値が大きいほど順位が高い）"],
+                ["rank_percent",          "全体に対するパーセンタイル（0〜100%）。100%に近いほど予測値が大きい"],
+              ]}
+            />
+            <Callout type="tip">
+              <strong>活用例：</strong>分類タスクでリスクの高い上位20%を絞り込む場合 → rank_percent が 80% 以上のレコードを抽出してください。
+            </Callout>
+          </section>
+
+          {/* ═══ 用語集 ═══ */}
+          <section id="glossary">
+            <h2 className="text-2xl font-bold text-foreground mb-6 pb-2 border-b border-border">用語集</h2>
+            <NiceTable
+              headers={["用語", "意味"]}
+              rows={[
+                ["目的変数",           "予測したい値。AIが学習する「答え」"],
+                ["説明変数（特徴量）", "予測に使う入力値。複数のカラムを指定できる"],
+                ["回帰",               "連続的な数値を予測するタスク（例：売上金額）"],
+                ["分類",               "どのカテゴリに属するかを判定するタスク（例：リスクあり/なし）"],
+                ["LightGBM",           "高精度な機械学習アルゴリズム。複雑なパターンに強い"],
+                ["線形回帰",           "数値の予測に使うシンプルなモデル。係数で影響を解釈できる"],
+                ["ロジスティック回帰", "二値分類に使うシンプルなモデル。オッズ比で解釈できる"],
+                ["精度（Accuracy）",   "分類モデルが正しく判定した割合（0〜1）"],
+                ["R²（決定係数）",     "回帰モデルの予測精度（0〜1）。1.0が完璧な予測"],
+                ["AUC",                "分類モデルの識別性能（0.5〜1.0）。0.5はランダムと同等"],
+                ["RMSE",               "回帰モデルの予測誤差。小さいほど精度が高い"],
+                ["MAE",                "回帰モデルの平均誤差。外れ値の影響を受けにくい"],
+                ["特徴量重要度",       "各説明変数が予測にどれくらい貢献しているかの指標"],
+                ["p値",                "係数が偶然生じた確率。0.05未満で「統計的に有意」と判断"],
+                ["プロジェクト",       "データ・設定・結果をまとめて管理する単位"],
+                ["リレーション",       "複数のCSVファイル間の結合定義"],
+                ["OneToMany",          "親テーブルの1件に対して子テーブルが複数件対応する関係"],
+                ["値ラベル",           "コード値（0, 1など）に付ける人間が読める名前"],
+              ]}
+            />
+          </section>
+
+          {/* ═══ FAQ ═══ */}
+          <section id="faq">
+            <h2 className="text-2xl font-bold text-foreground mb-6 pb-2 border-b border-border">よくある質問</h2>
+
+            <FaqItem q="CSVをアップロードしたのに、カラムの型が間違っている">
+              型は自動推論されますが、誤判定することがあります。カラム行のドロップダウンから正しい型に変更してください。特に <strong>「id」型</strong> の設定が重要です。IDカラムをid型に設定すると、予測結果CSVに自動でID列が付与されます。
+            </FaqItem>
+
+            <FaqItem q="「学習時の特徴量がCSVに含まれていません」というエラーが出る">
+              予測用CSVのカラム名が学習時と一致していない可能性があります。<br />
+              ① 予測用CSVに学習で使った特徴量のカラムがすべて含まれているか確認<br />
+              ② カラム名のスペルが完全に一致しているか（大文字小文字、スペースなど）確認<br />
+              ③ 分析設定を再選択または再学習してみてください
+            </FaqItem>
+
+            <FaqItem q="精度（R²やAUC）が低い。どうすればいい？">
+              ① <strong>特徴量を見直す</strong>：重要度が低い特徴量を外して再学習<br />
+              ② <strong>目的変数を確認</strong>：欠損値が多い、または分布が極端に偏っていないか確認<br />
+              ③ <strong>データを増やす</strong>：学習データが少ない（数百件以下）と精度が出にくい<br />
+              ④ <strong>モデルを変える</strong>：LightGBMに切り替えると精度が上がることが多い
+            </FaqItem>
+
+            <FaqItem q="同じCSVを何度アップロードしても同じ結果になる？">
+              はい、同じ入力データには同じ予測結果が返ります。これは正常な動作です。予測は「新しいデータ（まだ答えが分からないデータ）」に対して行うものです。
+            </FaqItem>
+
+            <FaqItem q="一度学習したモデルはずっと使える？">
+              はい、学習済みモデルはサーバーに保存されており、いつでも予測に使えます。ただし <strong>分析設定に使っているCSVを削除すると学習結果も消えます</strong> のでご注意ください。
+            </FaqItem>
+
+            <FaqItem q="リレーション設定は必ず必要？">
+              いいえ。CSVが1つだけの場合はリレーション設定をスキップしてStep 3に進めます。
+            </FaqItem>
+
+            <FaqItem q="学習中に他の操作はできる？">
+              はい。学習はバックグラウンドで実行されます。学習中に別のページを操作しても学習は継続され、完了すると通知が届きます。
+            </FaqItem>
+
+            <FaqItem q="予測結果の predicted_value が 0 か 1 しかない（分類タスク）">
+              古い学習済みモデルを使っている可能性があります。<strong>再学習</strong> を実行してください。現在のバージョンでは、分類タスクの predicted_value は「陽性クラスの確率（0〜1 の小数）」として出力されます。
+            </FaqItem>
+          </section>
+
+          {/* フッター */}
+          <footer className="pt-8 border-t border-border text-center">
+            <p className="text-xs text-muted-foreground">分析くん 利用マニュアル</p>
+          </footer>
+
+        </main>
+      </div>
+    </div>
+  )
+}
