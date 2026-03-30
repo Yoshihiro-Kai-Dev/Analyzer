@@ -10,8 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, ChevronRight, AlertCircle, Save, Trash2 } from 'lucide-react';
-import { CircleNotch } from '@phosphor-icons/react';
+import { CheckCircle, CaretRight, Warning, FloppyDisk, Trash, CircleNotch } from '@phosphor-icons/react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import {
@@ -246,7 +245,7 @@ export default function AnalysisConfigPage() {
                                         onClick={() => handleDeleteClick(config)}
                                         title="この設定を削除"
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Trash className="w-4 h-4" weight="regular" />
                                     </Button>
                                 </CardHeader>
                                 <CardContent className="space-y-2">
@@ -303,7 +302,7 @@ export default function AnalysisConfigPage() {
                                         >
                                             {/* 完了済みはチェックマークアイコンを表示 */}
                                             {isCompleted
-                                                ? <CheckCircle2 className="w-5 h-5" />
+                                                ? <CheckCircle className="w-5 h-5" weight="fill" />
                                                 : s.number}
                                         </div>
                                         <span
@@ -337,7 +336,7 @@ export default function AnalysisConfigPage() {
                     {/* バリデーションエラー表示 */}
                     {validationError && (
                         <p className="text-sm text-destructive mt-2 flex items-center gap-1">
-                            <AlertCircle className="w-4 h-4" />
+                            <Warning className="w-4 h-4" weight="fill" />
                             {validationError}
                         </p>
                     )}
@@ -400,13 +399,13 @@ export default function AnalysisConfigPage() {
                             {mainTableId && configName.trim() && (
                                 <div className="mt-2 p-4 bg-primary/5 border border-primary/20 rounded-lg flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-sm text-primary">
-                                        <CheckCircle2 className="w-4 h-4" />
+                                        <CheckCircle className="w-4 h-4" weight="fill" />
                                         <span>
                                             <span className="font-semibold">{getTargetTable()?.physical_table_name}</span> を選択しました。次のステップへ進んでください。
                                         </span>
                                     </div>
                                     <Button onClick={handleNext} size="sm" className="gap-1">
-                                        次のステップへ <ChevronRight className="w-4 h-4" />
+                                        次のステップへ <CaretRight className="w-4 h-4" weight="bold" />
                                     </Button>
                                 </div>
                             )}
@@ -452,7 +451,7 @@ export default function AnalysisConfigPage() {
                                     >
                                         <div className="flex justify-between items-start mb-1">
                                             <span className="font-medium text-sm truncate w-full" title={col.physical_name}>{col.physical_name}</span>
-                                            {targetColumnId === col.id.toString() && <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 ml-2" />}
+                                            {targetColumnId === col.id.toString() && <CheckCircle className="w-4 h-4 text-primary flex-shrink-0 ml-2" weight="fill" />}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Badge variant="outline" className={`text-[10px] h-5 ${col.inferred_type === 'numeric' ? 'bg-primary/10 text-primary border-primary/20' :
@@ -553,7 +552,7 @@ export default function AnalysisConfigPage() {
                                 <div className="flex justify-center py-10 text-muted-foreground">提案を生成中...</div>
                             ) : suggestions.length === 0 ? (
                                 <div className="text-center py-10 text-muted-foreground bg-secondary/20 rounded-lg border border-dashed border-border">
-                                    <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                    <Warning className="w-8 h-8 mx-auto mb-2 opacity-50" weight="fill" />
                                     提案可能な特徴量がありません。<br />
                                     <span className="text-xs">リレーションが定義されていないか、結合可能なテーブルがありません。「結合設定」画面を確認してください。</span>
                                 </div>
@@ -647,7 +646,7 @@ export default function AnalysisConfigPage() {
                                 <TooltipTrigger asChild>
                                     <span className={nextDisabledReason ? "cursor-not-allowed inline-flex" : "inline-flex"}>
                                         <Button onClick={handleNext} size="default" className="gap-1" disabled={!!nextDisabledReason}>
-                                            次へ <ChevronRight className="w-4 h-4" />
+                                            次へ <CaretRight className="w-4 h-4" weight="bold" />
                                         </Button>
                                     </span>
                                 </TooltipTrigger>
@@ -658,7 +657,7 @@ export default function AnalysisConfigPage() {
                         );
                     })() : (
                         <Button onClick={handleSave} className="bg-primary hover:opacity-90 text-primary-foreground">
-                            <Save className="w-4 h-4 mr-2" />
+                            <FloppyDisk className="w-4 h-4 mr-2" weight="regular" />
                             設定を保存して完了
                         </Button>
                     )}

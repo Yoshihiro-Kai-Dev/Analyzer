@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { CaretDown, CaretUp } from '@phosphor-icons/react';
 
 const INITIAL_DISPLAY_COUNT = 5;
 
@@ -10,8 +10,8 @@ const INITIAL_DISPLAY_COUNT = 5;
 const TYPE_META: Record<string, { icon: string; style: React.CSSProperties }> = {
     numeric:     { icon: '#', style: { background: 'hsl(243 75% 97%)', color: 'hsl(243 75% 55%)', border: '1px solid hsl(243 75% 80%)' } },
     categorical: { icon: 'A', style: { background: 'hsl(151 55% 95%)', color: 'hsl(151 55% 35%)', border: '1px solid hsl(151 55% 70%)' } },
-    datetime:    { icon: '⏰', style: { background: 'hsl(38 96% 95%)', color: 'hsl(38 96% 35%)',  border: '1px solid hsl(38 96% 70%)' } },
-    id:          { icon: '🔑', style: { background: 'hsl(270 60% 96%)', color: 'hsl(270 60% 45%)', border: '1px solid hsl(270 60% 75%)' } },
+    datetime:    { icon: 'D', style: { background: 'hsl(38 96% 95%)', color: 'hsl(38 96% 35%)',  border: '1px solid hsl(38 96% 70%)' } },
+    id:          { icon: 'ID', style: { background: 'hsl(270 60% 96%)', color: 'hsl(270 60% 45%)', border: '1px solid hsl(270 60% 75%)' } },
     text:        { icon: 'T', style: { background: 'hsl(200 60% 95%)', color: 'hsl(200 60% 40%)', border: '1px solid hsl(200 60% 70%)' } },
 }
 
@@ -145,9 +145,9 @@ export function TableNode({ data }: TableNodeProps) {
                         onClick={() => setExpanded(!expanded)}
                     >
                         {expanded ? (
-                            <><ChevronUp className="w-3 h-3" />折りたたむ</>
+                            <><CaretUp className="w-3 h-3" weight="bold" />折りたたむ</>
                         ) : (
-                            <><ChevronDown className="w-3 h-3" />他 {hiddenCount} 件を表示</>
+                            <><CaretDown className="w-3 h-3" weight="bold" />他 {hiddenCount} 件を表示</>
                         )}
                     </button>
                 )}

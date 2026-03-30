@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-    Trash2, Plus, Cpu, FolderOpen, Share2, LogOut, User,
-    BarChart2, Clock, ChevronRight, ArrowRight
-} from 'lucide-react';
+    Trash, Plus, Cpu, ShareNetwork, SignOut,
+    ChartBar, Clock, CaretRight, ArrowRight
+} from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -195,7 +195,7 @@ export default function PortalPage() {
                                         onClick={handleLogout}
                                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
                                     >
-                                        <LogOut className="w-3.5 h-3.5" />
+                                        <SignOut className="w-3.5 h-3.5" />
                                         ログアウト
                                     </button>
                                 </div>
@@ -206,7 +206,7 @@ export default function PortalPage() {
                     {/* ユーザー情報取得前のフォールバック */}
                     {!currentUser && (
                         <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground">
-                            <LogOut className="w-4 h-4 mr-1.5" />
+                            <SignOut className="w-4 h-4 mr-1.5" />
                             ログアウト
                         </Button>
                     )}
@@ -232,7 +232,7 @@ export default function PortalPage() {
                                     </span>
                                     <span className="text-xs">{step}</span>
                                 </span>
-                                {i < 4 && <ChevronRight className="w-3 h-3 opacity-40" />}
+                                {i < 4 && <CaretRight className="w-3 h-3 opacity-40" weight="bold" />}
                             </span>
                         ))}
                     </div>
@@ -337,7 +337,7 @@ export default function PortalPage() {
                         <div className="flex flex-col items-center justify-center py-20 bg-card rounded-2xl border border-dashed border-border animate-fade-in">
                             {/* アイコン */}
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/10 to-purple-400/10 flex items-center justify-center mb-5 shadow-sm">
-                                <BarChart2 className="w-8 h-8 text-primary/70" />
+                                <ChartBar className="w-8 h-8 text-primary/70" />
                             </div>
                             <p className="text-lg font-bold text-foreground mb-1">
                                 まずはプロジェクトを作成しましょう
@@ -425,7 +425,7 @@ export default function PortalPage() {
                                             </div>
                                             <span className="flex items-center gap-1 text-primary/60 font-medium">
                                                 開く
-                                                <ChevronRight className="w-3 h-3" />
+                                                <CaretRight className="w-3 h-3" weight="bold" />
                                             </span>
                                         </CardFooter>
 
@@ -437,7 +437,7 @@ export default function PortalPage() {
                                                 className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
                                                 title="プロジェクトを共有"
                                             >
-                                                <Share2 className="w-4 h-4" />
+                                                <ShareNetwork className="w-4 h-4" />
                                             </button>
                                             {/* 削除ボタン */}
                                             <button
@@ -445,7 +445,7 @@ export default function PortalPage() {
                                                 className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
                                                 title="プロジェクトを削除"
                                             >
-                                                <Trash2 className="w-4 h-4" />
+                                                <Trash className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </Card>

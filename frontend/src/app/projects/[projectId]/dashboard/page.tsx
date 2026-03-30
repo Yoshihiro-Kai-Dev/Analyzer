@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Play, Loader2, TrendingUp, BarChart2, Sparkles, HelpCircle, GitBranch, ListTree, Table2, XCircle, History, ChevronRight } from 'lucide-react';
+import { Play, CircleNotch, TrendUp, ChartBar, Sparkle, Question, GitBranch, ListBullets, Table, Warning, ClockCounterClockwise, CaretRight } from '@phosphor-icons/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import ReactFlow, {
@@ -442,7 +442,7 @@ export default function DashboardPage() {
                         <TooltipTrigger asChild>
                             <span className={trainDisabledReason ? "cursor-not-allowed inline-flex" : "inline-flex"}>
                                 <Button onClick={startTraining} disabled={!!trainDisabledReason} className="bg-primary hover:opacity-90 text-primary-foreground">
-                                    {job !== null && (job.status === "running" || job.status === "pending") ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                                    {job !== null && (job.status === "running" || job.status === "pending") ? <CircleNotch className="w-4 h-4 mr-2 animate-spin" weight="bold" /> : <Play className="w-4 h-4 mr-2" weight="fill" />}
                                     学習実行
                                 </Button>
                             </span>
@@ -478,7 +478,7 @@ export default function DashboardPage() {
                 <Card>
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">
-                            <History className="w-4 h-4 text-muted-foreground" />
+                            <ClockCounterClockwise className="w-4 h-4 text-muted-foreground" />
                             過去の学習結果
                         </CardTitle>
                         <CardDescription>
@@ -489,7 +489,7 @@ export default function DashboardPage() {
                         {loadingPastJobs ? (
                             // ジョブ一覧読み込み中のスピナー
                             <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <CircleNotch className="w-4 h-4 animate-spin" weight="bold" />
                                 読み込み中...
                             </div>
                         ) : pastJobs.length === 0 ? (
@@ -515,7 +515,7 @@ export default function DashboardPage() {
                                                     : 'bg-white border-border text-foreground hover:bg-secondary/60'
                                                 }`}
                                         >
-                                            <ChevronRight className="w-3.5 h-3.5" />
+                                            <CaretRight className="w-3.5 h-3.5" weight="bold" />
                                             Job #{j.id}
                                             {j.created_at && (
                                                 <span className={`text-xs ${isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
@@ -557,7 +557,7 @@ export default function DashboardPage() {
                             <Card className="border-primary/20 bg-primary/5">
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2 text-primary">
-                                        <Sparkles className="w-5 h-5 text-yellow-500 fill-yellow-500" /> AI アナリティクス・インサイト
+                                        <Sparkle className="w-5 h-5 text-yellow-500" weight="fill" /> AI アナリティクス・インサイト
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
@@ -573,7 +573,7 @@ export default function DashboardPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <TrendingUp className="w-5 h-5" /> 評価指標
+                                <TrendUp className="w-5 h-5" /> 評価指標
                             </CardTitle>
                             {result.model_type && (
                                 <div className="flex items-center gap-1.5 pt-0.5">
@@ -598,7 +598,7 @@ export default function DashboardPage() {
                                                 {/* グラデーション背景カード */}
                                                 <div className={`bg-gradient-to-br ${gradient} p-4 rounded-xl text-center cursor-help transition-opacity hover:opacity-90 shadow-sm`}>
                                                     <div className="text-xs text-white/80 uppercase font-semibold flex items-center justify-center gap-1 mb-1">
-                                                        {key} <HelpCircle className="w-3 h-3" />
+                                                        {key} <Question className="w-3 h-3" />
                                                     </div>
                                                     {/* 数値を大きく強調 */}
                                                     <div className="text-3xl font-bold text-white drop-shadow">
@@ -620,7 +620,7 @@ export default function DashboardPage() {
                     <Card className="col-span-1 md:col-span-2 lg:col-span-1">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <BarChart2 className="w-5 h-5" /> 重要特徴量
+                                <ChartBar className="w-5 h-5" /> 重要特徴量
                             </CardTitle>
                             <CardDescription>モデルの予測に寄与した上位20件の特徴量</CardDescription>
                         </CardHeader>
@@ -684,7 +684,7 @@ export default function DashboardPage() {
                         <Card className="col-span-1 md:col-span-2">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Table2 className="w-5 h-5" /> 係数統計
+                                    <Table className="w-5 h-5" /> 係数統計
                                 </CardTitle>
                                 <CardDescription>
                                     {result.coef_stats[0]?.odds_ratio != null
@@ -781,7 +781,7 @@ export default function DashboardPage() {
                         <Card className="col-span-1 md:col-span-2">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <ListTree className="w-5 h-5" /> 数式
+                                    <ListBullets className="w-5 h-5" /> 数式
                                 </CardTitle>
                                 <CardDescription>
                                     {result.coef_stats[0]?.odds_ratio != null
@@ -836,7 +836,7 @@ export default function DashboardPage() {
                         <Card className="col-span-1 md:col-span-2">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Sparkles className="w-5 h-5" /> 値のシミュレーション
+                                    <Sparkle className="w-5 h-5" /> 値のシミュレーション
                                 </CardTitle>
                                 <CardDescription>
                                     特徴量の値を変えて予測値をシミュレーションします（係数×入力値の合計）
@@ -991,7 +991,7 @@ export default function DashboardPage() {
                         <Card className="col-span-1 md:col-span-2">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <ListTree className="w-5 h-5" /> 分岐ルール一覧
+                                    <ListBullets className="w-5 h-5" /> 分岐ルール一覧
                                 </CardTitle>
                                 <CardDescription>
                                     決定木から抽出した IF/THEN ルール

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react'
-import { Trash2, UserPlus } from 'lucide-react'
+import { Trash, UserPlus } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -157,7 +157,7 @@ export default function ShareDialog({ projectId, open, onClose }: ShareDialogPro
                                             className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
                                             title="メンバーを削除"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash className="w-4 h-4" />
                                         </button>
                                     )}
                                 </li>
