@@ -386,12 +386,12 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                                     value={minOverlapRate}
                                     className="w-16 h-6 text-xs border border-input rounded px-1 text-center font-mono"
                                     onChange={e => setMinOverlapRate(Number(e.target.value))}
-                                    onBlur={() => {
-                                        if (reviewTableId) fetchLabelSuggestions(reviewTableId, minOverlapRate)
+                                    onBlur={e => {
+                                        if (reviewTableId) fetchLabelSuggestions(reviewTableId, Number(e.target.value))
                                     }}
                                     onKeyDown={e => {
                                         if (e.key === "Enter" && reviewTableId) {
-                                            fetchLabelSuggestions(reviewTableId, minOverlapRate)
+                                            fetchLabelSuggestions(reviewTableId, Number((e.target as HTMLInputElement).value))
                                         }
                                     }}
                                 />
