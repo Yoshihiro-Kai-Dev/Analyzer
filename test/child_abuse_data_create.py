@@ -19,8 +19,7 @@ from datetime import datetime, timedelta
 # 結合キー: 児童ID
 # ---------------------------------------------------------
 
-np.random.seed(42)
-random.seed(42)
+# シード固定なし（実行ごとに異なるデータを生成）
 NUM_RECORDS = 5_000
 
 def random_date(start: datetime, end: datetime) -> str:
