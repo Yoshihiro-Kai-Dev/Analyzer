@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -617,11 +618,35 @@ export default function AnalysisConfigPage() {
                         戻る
                     </Button>
 
-                    {step < 3 ? (
-                        <Button onClick={handleNext} size="default" className="gap-1">
-                            次へ <ChevronRight className="w-4 h-4" />
-                        </Button>
-                    ) : (
+                    {step < 3 ? (() => {
+                        // ステップごとに「次へ」ボタンが無効化される理由を計算する
+                        const nextDisabledReason =
+                            step === 1
+                                ? !mainTableId
+                                    ? "テーブルを選択してください"
+                                    : !configName.trim()
+                                        ? "設定名を入力してください"
+                                        : null
+                                : step === 2
+                                    ? !targetColumnId
+                                        ? "目的変数を選択してください"
+                                        : null
+                                    : null;
+                        return (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className={nextDisabledReason ? "cursor-not-allowed inline-flex" : "inline-flex"}>
+                                        <Button onClick={handleNext} size="default" className="gap-1" disabled={!!nextDisabledReason}>
+                                            次へ <ChevronRight className="w-4 h-4" />
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                {nextDisabledReason && (
+                                    <TooltipContent>{nextDisabledReason}</TooltipContent>
+                                )}
+                            </Tooltip>
+                        );
+                    })() : (
                         <Button onClick={handleSave} className="bg-primary hover:opacity-90 text-primary-foreground">
                             <Save className="w-4 h-4 mr-2" />
                             設定を保存して完了
