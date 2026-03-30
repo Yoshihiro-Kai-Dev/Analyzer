@@ -304,18 +304,20 @@ def get_label_suggestions(
                 )
             ).fetchall()
             new_values = {str(r[0]) for r in rows}
-        except Exception:
+        except Exception as e:
+            print(f"Failed to get distinct values for column {col.physical_name}: {e}")
             continue
 
         if not new_values:
             continue
 
         # 既存 value_labels キーとの重複率を計算し閾値以上の候補を収集する
+        n = len(new_values)
         suggestions = []
         for match_col in matching_cols:
             existing_keys = set(match_col.value_labels.keys())
             overlap = new_values & existing_keys
-            overlap_rate = int(len(overlap) / len(new_values) * 100)
+            overlap_rate = int(len(overlap) / n * 100)
             if overlap_rate >= min_overlap_rate:
                 suggestions.append({
                     "source_table_id": match_col.table_id,
