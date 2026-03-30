@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BIZ_UDPGothic } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/components/auth-provider";
+import { Toaster } from "sonner";
 
 const bizUDPGothic = BIZ_UDPGothic({
   weight: ["400", "700"],
@@ -30,6 +31,8 @@ export default function RootLayout({
         <AuthProvider>
           {children}
         </AuthProvider>
+        {/* トースト通知 */}
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );
