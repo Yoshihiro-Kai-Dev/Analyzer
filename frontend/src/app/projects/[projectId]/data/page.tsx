@@ -371,7 +371,7 @@ export default function DataPage() {
                 </div>
 
             {/* テーブル削除確認ダイアログ */}
-            <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+            <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteImpact({ count: 0, loading: false }) } }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>テーブルを削除しますか？</DialogTitle>
