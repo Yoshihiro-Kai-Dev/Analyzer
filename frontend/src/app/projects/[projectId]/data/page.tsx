@@ -296,7 +296,7 @@ export default function DataPage() {
                                                                     }).catch(() => setDeleteImpact({ count: 0, loading: false }))
                                                                 }}
                                                             >
-                                                                <Trash className="w-4 h-4 mr-2" />
+                                                                <Trash className="w-4 h-4 mr-2" weight="bold" />
                                                                 削除する
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>

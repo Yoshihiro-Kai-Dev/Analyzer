@@ -381,7 +381,7 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                                 className="flex-1"
                                 onClick={() => resetState()}
                             >
-                                <Plus className="w-4 h-4" />
+                                <Plus className="w-4 h-4" weight="bold" />
                                 別のファイルを追加
                             </Button>
                             <Button
@@ -390,7 +390,7 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                                 onClick={() => onUploadComplete?.()}
                             >
                                 次のステップへ
-                                <ArrowRight className="w-4 h-4" />
+                                <ArrowRight className="w-4 h-4" weight="bold" />
                             </Button>
                         </div>
                     </div>

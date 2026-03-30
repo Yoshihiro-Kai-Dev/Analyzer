@@ -87,6 +87,7 @@ export function SidebarNav({ projectId, completedSteps = new Set() }: SidebarNav
             ) : locked ? (
               <Lock
                 className="flex-shrink-0 w-5 h-5 opacity-50"
+                weight="fill"
                 style={{ color: "var(--sidebar-foreground)" }}
               />
             ) : (
