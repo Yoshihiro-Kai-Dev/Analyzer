@@ -6,7 +6,8 @@ import { FileUpload } from "@/components/file-upload"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, ChevronDown, ChevronRight, Database, MoreHorizontal, Copy } from "lucide-react"
+import { ChevronDown, ChevronRight, Database, MoreHorizontal, Copy } from "lucide-react"
+import { CircleNotch, Trash } from "@phosphor-icons/react"
 import {
     Dialog,
     DialogContent,
@@ -58,6 +59,8 @@ export default function DataPage() {
     // 削除確認ダイアログの状態
     const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
     const [deleting, setDeleting] = useState(false)
+    // 削除対象テーブルに紐づく影響件数（分析設定数）
+    const [deleteImpact, setDeleteImpact] = useState<{ count: number; loading: boolean }>({ count: 0, loading: false })
 
     // カラム詳細モーダルの状態
     const [colStats, setColStats] = useState<any | null>(null)
@@ -111,16 +114,6 @@ export default function DataPage() {
                 next.add(tableId)
             }
             return next
-        })
-    }
-
-    // 削除ボタンクリック時：確認ダイアログを開く
-    const handleDeleteClick = (e: React.MouseEvent, table: any) => {
-        // カードのクリックイベントとの衝突を防ぐ
-        e.stopPropagation()
-        setDeleteTarget({
-            id: table.id,
-            name: table.original_filename || table.physical_table_name,
         })
     }
 
@@ -290,19 +283,25 @@ export default function DataPage() {
                                                                 <Copy className="w-4 h-4 mr-2" />
                                                                 テーブルをコピー
                                                             </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    setDeleteTarget({ id: table.id, name: table.original_filename || table.physical_table_name })
+                                                                    // 影響件数をフェッチ（削除ダイアログ表示中にAPIを叩く）
+                                                                    setDeleteImpact({ count: 0, loading: true })
+                                                                    apiClient.get(`/api/projects/${projectId}/analysis/configs`).then(res => {
+                                                                        const configs: any[] = res.data ?? []
+                                                                        const affected = configs.filter((c: any) => c.main_table_id === table.id).length
+                                                                        setDeleteImpact({ count: affected, loading: false })
+                                                                    }).catch(() => setDeleteImpact({ count: 0, loading: false }))
+                                                                }}
+                                                            >
+                                                                <Trash className="w-4 h-4 mr-2" />
+                                                                削除する
+                                                            </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
-
-                                                    {/* 削除ボタン */}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                        onClick={(e) => handleDeleteClick(e, table)}
-                                                        title="テーブルを削除"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
 
                                                     {/* 展開・折りたたみアイコン */}
                                                     {isExpanded
@@ -380,12 +379,22 @@ export default function DataPage() {
                             「{deleteTarget?.name}」を削除します。<br />
                             削除すると関連するリレーション・分析設定も全て削除されます。この操作は元に戻せません。
                         </DialogDescription>
+                        {deleteImpact.loading ? (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                                <CircleNotch className="w-3 h-3 animate-spin" weight="bold" />
+                                影響を確認中...
+                            </p>
+                        ) : deleteImpact.count > 0 ? (
+                            <p className="text-sm text-destructive font-medium mt-1">
+                                このテーブルを削除すると、{deleteImpact.count}件の分析設定も削除されます。
+                            </p>
+                        ) : null}
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
                             キャンセル
                         </Button>
-                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting}>
+                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting || deleteImpact.loading}>
                             {deleting ? "削除中..." : "削除する"}
                         </Button>
                     </DialogFooter>

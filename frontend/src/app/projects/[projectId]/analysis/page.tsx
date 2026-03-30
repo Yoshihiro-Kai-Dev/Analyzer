@@ -50,6 +50,8 @@ export default function AnalysisConfigPage() {
     // 削除確認ダイアログの状態
     const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
     const [deleting, setDeleting] = useState(false);
+    // 削除対象の分析設定に紐づく影響件数（学習ジョブ数）
+    const [deleteConfigImpact, setDeleteConfigImpact] = useState<{ count: number; loading: boolean }>({ count: 0, loading: false });
 
     // 選択値
     const [configName, setConfigName] = useState<string>("");
@@ -176,6 +178,13 @@ export default function AnalysisConfigPage() {
     // 削除ボタンクリック時：確認ダイアログを開く
     const handleDeleteClick = (config: any) => {
         setDeleteTarget({ id: config.id, name: config.name || `設定 #${config.id}` });
+        // 影響件数をフェッチ（削除ダイアログ表示中にAPIを叩く）
+        setDeleteConfigImpact({ count: 0, loading: true });
+        apiClient.get(`/api/projects/${projectId}/train/jobs`).then(res => {
+            const jobs: any[] = res.data ?? []
+            const affected = jobs.filter((j: any) => j.config_id === config.id).length
+            setDeleteConfigImpact({ count: affected, loading: false })
+        }).catch(() => setDeleteConfigImpact({ count: 0, loading: false }));
     };
 
     // 削除確認後の実際の削除処理
@@ -664,12 +673,17 @@ export default function AnalysisConfigPage() {
                             「{deleteTarget?.name}」を削除します。<br />
                             この操作は元に戻せません。
                         </DialogDescription>
+                        {deleteConfigImpact.count > 0 && !deleteConfigImpact.loading && (
+                            <p className="text-sm text-destructive font-medium mt-1">
+                                この設定を削除すると、{deleteConfigImpact.count}件の学習ジョブも削除されます。
+                            </p>
+                        )}
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
                             キャンセル
                         </Button>
-                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting}>
+                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting || deleteConfigImpact.loading}>
                             {deleting ? "削除中..." : "削除する"}
                         </Button>
                     </DialogFooter>
