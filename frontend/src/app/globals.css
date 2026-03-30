@@ -68,7 +68,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* --- フォント --- */
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-biz-ud), 'BIZ UDPGothic', 'Hiragino Sans', system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
 
   /* --- 角丸スケール ---
@@ -87,78 +87,77 @@
 
 /* =====================================================
    ライトモード カラーパレット
-   テーマ: Deep Indigo × Amber（ML専門ツール向け）
+   テーマ: Cozy Studio（フォレストグリーン × クリーム）
    ===================================================== */
 :root {
-  /* 角丸基準値（10px — 少し丸みを増す） */
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
   /* 背景・テキスト */
-  --background: hsl(240, 20%, 98%);
-  --foreground: hsl(240, 25%, 12%);
+  --background: hsl(40, 20%, 96%);
+  --foreground: hsl(155, 30%, 14%);
 
   /* カード */
-  --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(240, 25%, 12%);
+  --card: hsl(45, 40%, 99%);
+  --card-foreground: hsl(155, 30%, 14%);
 
   /* ポップオーバー */
-  --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(240, 25%, 12%);
+  --popover: hsl(45, 40%, 99%);
+  --popover-foreground: hsl(155, 30%, 14%);
 
-  /* プライマリ: Deep Indigo */
-  --primary: hsl(243, 75%, 59%);
+  /* プライマリ: フォレストグリーン */
+  --primary: hsl(155, 40%, 30%);
   --primary-foreground: hsl(0, 0%, 100%);
 
-  /* セカンダリ: 薄いインディゴ */
-  --secondary: hsl(243, 40%, 95%);
-  --secondary-foreground: hsl(243, 40%, 30%);
+  /* セカンダリ */
+  --secondary: hsl(155, 30%, 92%);
+  --secondary-foreground: hsl(155, 40%, 20%);
 
-  /* ミュート: 非強調 */
-  --muted: hsl(240, 15%, 95%);
-  --muted-foreground: hsl(240, 10%, 50%);
+  /* ミュート */
+  --muted: hsl(40, 15%, 93%);
+  --muted-foreground: hsl(155, 15%, 45%);
 
-  /* アクセント: ホバー背景 */
-  --accent: hsl(243, 40%, 93%);
-  --accent-foreground: hsl(243, 50%, 30%);
+  /* アクセント */
+  --accent: hsl(155, 35%, 90%);
+  --accent-foreground: hsl(155, 40%, 18%);
 
-  /* デストラクティブ: 赤系 */
+  /* デストラクティブ */
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 100%);
 
-  /* ボーダー・入力・フォーカスリング */
-  --border: hsl(240, 15%, 88%);
-  --input: hsl(240, 15%, 88%);
-  --ring: hsl(243, 75%, 59%);
+  /* ボーダー・入力・リング */
+  --border: hsl(35, 20%, 87%);
+  --input: hsl(35, 20%, 87%);
+  --ring: hsl(155, 40%, 30%);
 
   /* セマンティックカラー */
   --success: hsl(151, 55%, 42%);
   --success-foreground: hsl(0, 0%, 100%);
-  --success-muted: hsl(151, 55%, 95%);
+  --success-muted: hsl(151, 55%, 93%);
   --warning: hsl(38, 96%, 54%);
   --warning-foreground: hsl(38, 96%, 18%);
   --warning-muted: hsl(38, 96%, 95%);
 
-  /* チャートカラー（インディゴ・エメラルド・アンバー・ピンク・シアン） */
-  --chart-1: hsl(243, 75%, 59%);
-  --chart-2: hsl(151, 55%, 42%);
-  --chart-3: hsl(38, 96%, 54%);
+  /* チャートカラー（グリーン系に寄せる） */
+  --chart-1: hsl(155, 40%, 35%);
+  --chart-2: hsl(38, 96%, 54%);
+  --chart-3: hsl(192, 80%, 46%);
   --chart-4: hsl(320, 65%, 57%);
-  --chart-5: hsl(192, 80%, 46%);
+  --chart-5: hsl(243, 75%, 59%);
 
   /* エレベーション */
-  --shadow-sm: 0 1px 3px hsl(243 30% 12% / 0.06), 0 1px 2px hsl(243 30% 12% / 0.04);
-  --shadow-md: 0 4px 12px hsl(243 30% 12% / 0.08), 0 2px 4px hsl(243 30% 12% / 0.05);
-  --shadow-lg: 0 12px 32px hsl(243 30% 12% / 0.12), 0 4px 8px hsl(243 30% 12% / 0.06);
+  --shadow-sm: 0 1px 3px hsl(155 30% 12% / 0.06), 0 1px 2px hsl(155 30% 12% / 0.04);
+  --shadow-md: 0 4px 12px hsl(155 30% 12% / 0.08), 0 2px 4px hsl(155 30% 12% / 0.05);
+  --shadow-lg: 0 12px 32px hsl(155 30% 12% / 0.12), 0 4px 8px hsl(155 30% 12% / 0.06);
 
-  /* サイドバー: ダークインディゴ */
-  --sidebar: hsl(243, 40%, 18%);
-  --sidebar-foreground: hsl(240, 20%, 88%);
-  --sidebar-primary: hsl(243, 75%, 70%);
+  /* サイドバー: ダークフォレスト */
+  --sidebar: hsl(155, 25%, 18%);
+  --sidebar-foreground: hsl(40, 20%, 88%);
+  --sidebar-primary: hsl(155, 50%, 60%);
   --sidebar-primary-foreground: hsl(0, 0%, 100%);
-  --sidebar-accent: hsl(243, 40%, 26%);
+  --sidebar-accent: hsl(155, 25%, 26%);
   --sidebar-accent-foreground: hsl(0, 0%, 100%);
-  --sidebar-border: hsl(243, 30%, 24%);
-  --sidebar-ring: hsl(243, 75%, 70%);
+  --sidebar-border: hsl(155, 20%, 24%);
+  --sidebar-ring: hsl(155, 50%, 60%);
 }
 
 /* =====================================================
@@ -287,7 +286,7 @@
 
 /* グラデーションテキスト（ページタイトル・ブランド表示用） */
 .gradient-text {
-  background: linear-gradient(135deg, var(--primary), hsl(280, 70%, 65%));
+  background: linear-gradient(135deg, var(--primary), hsl(155, 60%, 50%));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
