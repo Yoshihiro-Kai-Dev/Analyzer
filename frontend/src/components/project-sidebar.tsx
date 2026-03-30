@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ChartBar, ArrowLeft, SignOut, User } from "@phosphor-icons/react"
+import { ChartBar, ArrowLeft, SignOut, CaretDown } from "@phosphor-icons/react"
 import { SidebarNav } from "@/components/sidebar-nav"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { apiClient } from "@/lib/api"
 import { removeToken, getToken } from "@/lib/auth"
 import { useRouter } from "next/navigation"
@@ -139,35 +140,45 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
       {/* ナビゲーション */}
       <SidebarNav projectId={projectId} completedSteps={stepStatus.completedSteps} />
 
-      {/* サイドバーフッター: ユーザー情報 + ログアウト */}
+      {/* サイドバーフッター: アカウントドロップダウン */}
       <div
-        className="px-4 py-3 shrink-0 flex items-center justify-between gap-2"
+        className="px-2 py-2 shrink-0"
         style={{ borderTop: "1px solid var(--sidebar-border)" }}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          {/* アバター（イニシャル表示） */}
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold"
-            style={{ backgroundColor: "var(--sidebar-accent)", color: "var(--sidebar-foreground)" }}
-          >
-            {username ? username.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
-          </div>
-          <span
-            className="text-xs font-medium truncate opacity-80"
-            style={{ color: "var(--sidebar-foreground)" }}
-          >
-            {username ?? "ユーザー"}
-          </span>
-        </div>
-        {/* ログアウトボタン */}
-        <button
-          onClick={handleLogout}
-          className="shrink-0 p-1.5 rounded-md transition-opacity opacity-50 hover:opacity-100"
-          style={{ color: "var(--sidebar-foreground)" }}
-          title="ログアウト"
-        >
-          <SignOut className="w-3.5 h-3.5" weight="bold" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 hover:opacity-80 text-left"
+              style={{ color: "var(--sidebar-foreground)" }}
+            >
+              {/* アバター：イニシャル表示 */}
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                style={{ backgroundColor: "var(--sidebar-accent)", color: "var(--sidebar-primary)" }}
+              >
+                {username ? username.charAt(0).toUpperCase() : "?"}
+              </div>
+              <span className="flex-1 truncate text-sm font-medium">{username ?? "..."}</span>
+              <CaretDown className="w-3.5 h-3.5 shrink-0 opacity-60" weight="bold" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-56">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-sm font-semibold leading-none">{username}</p>
+                <p className="text-xs text-muted-foreground leading-none mt-1">ログイン中</p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+              onClick={handleLogout}
+            >
+              <SignOut className="w-4 h-4 mr-2" weight="bold" />
+              ログアウト
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </aside>
   )
