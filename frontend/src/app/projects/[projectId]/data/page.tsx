@@ -194,7 +194,7 @@ export default function DataPage() {
             </div>
 
                 {/* ファイルアップロードコンポーネント（アップロード完了後にテーブル一覧を再取得） */}
-                <FileUpload projectId={projectId} onUploadComplete={handleUploadComplete} />
+                <FileUpload projectId={projectId} onUploadComplete={handleUploadComplete} onTableRegistered={fetchTables} />
 
                 {/* ── アップロード済みテーブル一覧セクション ── */}
                 <div className="mt-10">
