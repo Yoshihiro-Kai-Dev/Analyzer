@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, Download, Play, CheckCircle2, XCircle, Loader2, History } from "lucide-react"
+import { JobStatusCard, JobStatus } from "@/components/job-status-card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 // 特徴量設定の詳細
@@ -354,10 +355,11 @@ export default function PredictPage() {
           </CardHeader>
           <CardContent>
             {currentJob.status === "running" || currentJob.status === "pending" ? (
-              <div className="flex items-center gap-3 text-primary">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-sm">予測を実行中です...</span>
-              </div>
+              <JobStatusCard
+                status={currentJob.status as JobStatus}
+                message={null}
+                className="mb-4"
+              />
             ) : currentJob.status === "completed" ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-success">
@@ -453,10 +455,12 @@ export default function PredictPage() {
               </div>
             ) : (
               // 予測失敗時のエラー表示
-              <div className="flex items-center gap-2 text-destructive">
-                <XCircle className="h-5 w-5" />
-                <span className="text-sm">予測に失敗しました: {currentJob.error_message}</span>
-              </div>
+              <JobStatusCard
+                status={currentJob.status as JobStatus}
+                message={currentJob.error_message}
+                onRetry={currentJob.status === "failed" ? () => handleRun() : undefined}
+                className="mb-4"
+              />
             )}
           </CardContent>
         </Card>

@@ -355,3 +355,8 @@
   transform: none;
   box-shadow: none;
 }
+
+@keyframes shimmer {
+  from { width: 30%; margin-left: 0; }
+  to   { width: 50%; margin-left: 50%; }
+}
