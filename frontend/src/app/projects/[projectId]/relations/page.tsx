@@ -311,6 +311,7 @@ export default function RelationsPage() {
                         onEdgeClick={onEdgeClick}
                         nodeTypes={nodeTypes}
                         fitView
+                        fitViewOptions={{ maxZoom: 0.75, padding: 0.3 }}
                         className="bg-background"
                     >
                         <Controls />
