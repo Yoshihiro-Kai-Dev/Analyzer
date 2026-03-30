@@ -54,6 +54,8 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
     const [suggestionsLoading, setSuggestionsLoading] = useState(false)
     // 重複率閾値（デフォルト 30）
     const [minOverlapRate, setMinOverlapRate] = useState(30)
+    // 整数カラムのカテゴリ自動判定閾値（アップロード前に設定可能）
+    const [categoricalThreshold, setCategoricalThreshold] = useState(20)
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -75,17 +77,13 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
         setLabelAccepted({})
         setSuggestionsLoading(false)
         setMinOverlapRate(30)
+        // categoricalThreshold はユーザー設定のため resetState ではリセットしない
         setReviewColumns([])
         setReviewTableId(null)
         if (pollingInterval.current) {
             clearInterval(pollingInterval.current)
             pollingInterval.current = null
         }
-        // <input type="file"> のDOM値をリセット（React stateでは制御不可のため直接操作）
-        if (inputRef.current) {
-            inputRef.current.value = ""
-        }
-        setResetKey(prev => prev + 1)
         setFile(null)
     }
 
@@ -230,6 +228,7 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
 
         const formData = new FormData()
         formData.append("file", file)
+        formData.append("categorical_threshold", String(categoricalThreshold))
 
         try {
             const response = await apiClient.post(`/api/projects/${projectId}/upload/csv`, formData, {
@@ -272,14 +271,17 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
     }, [])
 
     // type_review フェーズ突入時（reviewTableId が設定された時点）にラベル候補を取得する
+    // React 18/19 の自動バッチングにより setReviewTableId と setStatus("type_review") が
+    // 別々の microtask continuation で呼ばれる場合、同一レンダリングにならない可能性がある。
+    // reviewTableId は type_review 突入時にのみ設定されるため、これのみを監視すれば十分。
     // minOverlapRate は意図的に依存配列から除外している（フェーズ突入時の初期値 30 を使用するため）
     // 閾値変更後の再取得は onBlur/onKeyDown で明示的に行う
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
-        if (reviewTableId && status === "type_review") {
+        if (reviewTableId) {
             fetchLabelSuggestions(reviewTableId, minOverlapRate)
         }
-    }, [reviewTableId, status])
+    }, [reviewTableId])
 
     const typeLabel = (t: string) =>
         t === 'numeric' ? '数値' :
@@ -306,6 +308,22 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                     <Label htmlFor="csv-file">CSVファイル</Label>
                     <Input id="csv-file" type="file" accept=".csv" onChange={handleFileChange} disabled={status !== "idle" && status !== "completed"} key={resetKey} ref={inputRef} />
                 </div>
+
+                {/* カテゴリ自動判定の閾値設定（idle / completed 時のみ表示） */}
+                {(status === "idle" || status === "completed") && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>整数カラムのカテゴリ自動判定: ユニーク値</span>
+                        <input
+                            type="number"
+                            min={1}
+                            max={1000}
+                            value={categoricalThreshold}
+                            className="w-16 h-6 text-xs border border-input rounded px-1 text-center font-mono"
+                            onChange={e => setCategoricalThreshold(Math.min(1000, Math.max(1, Number(e.target.value))))}
+                        />
+                        <span>種類以下 → カテゴリ型</span>
+                    </div>
+                )}
 
                 {/* Progress Steps */}
                 {(status !== "idle" || result) && (
@@ -436,15 +454,20 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                                             return (
                                                 // key は Fragment に付与する（内側の TableRow に付けても React に無視される）
                                                 <Fragment key={col.id}>
-                                                    <TableRow>
-                                                        <TableCell className="font-medium">{col.physical_name}</TableCell>
+                                                    <TableRow className={col.inferred_type === "unknown" ? "bg-red-50 hover:bg-red-100" : ""}>
+                                                        <TableCell className="font-medium">
+                                                            {col.inferred_type === "unknown" && (
+                                                                <span className="text-destructive font-bold mr-1" title="推論型が未設定です">!</span>
+                                                            )}
+                                                            {col.physical_name}
+                                                        </TableCell>
                                                         <TableCell>{col.data_type}</TableCell>
                                                         <TableCell>
                                                             <Select
                                                                 value={col.inferred_type}
                                                                 onValueChange={(val) => updateReviewColumnType(col.id, val)}
                                                             >
-                                                                <SelectTrigger className="w-32 h-7 text-xs">
+                                                                <SelectTrigger className={`w-32 h-7 text-xs ${col.inferred_type === "unknown" ? "border-destructive text-destructive" : ""}`}>
                                                                     <SelectValue />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
@@ -453,6 +476,7 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                                                                     <SelectItem value="datetime">日時</SelectItem>
                                                                     <SelectItem value="text">文字列</SelectItem>
                                                                     <SelectItem value="id">ユニークID</SelectItem>
+                                                                    <SelectItem value="unknown" className="text-destructive">未設定</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
                                                         </TableCell>
@@ -460,11 +484,11 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                                                             {col.sample_values?.join(", ")}
                                                         </TableCell>
                                                     </TableRow>
-                                                    {/* ラベル引き継ぎ候補行（categorical かつ候補がある場合のみ） */}
-                                                    {suggestion && suggestion.suggestions.length > 0 && (
+                                                    {/* ラベル引き継ぎ候補行（現在 categorical かつ候補がある場合のみ表示） */}
+                                                    {col.inferred_type === "categorical" && suggestion && suggestion.suggestions.length > 0 && (
                                                         <TableRow className="bg-secondary/20 hover:bg-secondary/30">
                                                             <TableCell colSpan={4} className="py-2 px-4">
-                                                                <div className="flex items-center justify-between gap-3">
+                                                                <div className="flex flex-col gap-2">
                                                                     <div className="text-xs text-muted-foreground">
                                                                         <span className="font-medium text-foreground">ラベル引き継ぎ候補</span>
                                                                         {" — "}
@@ -542,7 +566,11 @@ export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: F
                                 variant="outline"
                                 size="sm"
                                 className="flex-1"
-                                onClick={() => resetState()}
+                                onClick={() => {
+                                    resetState()
+                                    // ファイル入力を明示的にリセット（同一ファイルの再選択を可能にする）
+                                    setResetKey(prev => prev + 1)
+                                }}
                             >
                                 <Plus className="w-4 h-4" weight="bold" />
                                 別のファイルを追加
