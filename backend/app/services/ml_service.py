@@ -287,7 +287,9 @@ class MLService:
             
             agg_df = child_df.groupby(child_key)[numeric_cols].agg(['sum', 'mean'])
             # カラム名のリネーム (table_col_sum)
-            agg_df.columns = [f"{child_table.physical_table_name}_{col}_{stat}" for col, stat in agg_df.columns]
+            # 集約カラム名はテーブル名プレフィックスなしで "{列名}_{集計}" とする
+            # 予測時にアップロードCSVの列名と直接照合できるようにするため
+            agg_df.columns = [f"{col}_{stat}" for col, stat in agg_df.columns]
             
             # Merge to main_df
             main_df = main_df.merge(agg_df, left_on=parent_key, right_index=True, how='left') # Mainに残すためLeft Join
@@ -302,20 +304,28 @@ class MLService:
         for rel in relations_child:
             parent_table = self.db.query(models.TableMetadata).filter(models.TableMetadata.id == rel.parent_table_id).first()
             if not parent_table: continue
-             
+
             parent_df = pd.read_sql(f"SELECT * FROM {parent_table.physical_table_name}", self.engine)
-            
+
             join_keys = rel.join_keys
             parent_key = join_keys.get("parent_col")
             child_key = join_keys.get("child_col")
 
-            # Simple Join
-            # カラム名衝突回避のためにSuffixつけるか、prefixつける
-            parent_df = parent_df.add_prefix(f"{parent_table.physical_table_name}_")
-            # 結合キーの名前が変わってしまったので修正
-            p_key_renamed = f"{parent_table.physical_table_name}_{parent_key}"
-            
-            main_df = main_df.merge(parent_df, left_on=child_key, right_on=p_key_renamed, how='left')
+            # プレフィックスなしでシンプルに結合する
+            # 予測時にアップロードCSVのカラム名と直接照合できるようにするため、
+            # 物理テーブル名プレフィックスは付与しない
+            if child_key == parent_key:
+                main_df = main_df.merge(parent_df, on=child_key, how='left', suffixes=('', '_dup'))
+            else:
+                main_df = main_df.merge(parent_df, left_on=child_key, right_on=parent_key, how='left', suffixes=('', '_dup'))
+                # 結合後にparent側のキー列は不要なので削除（main側のキーを残す）
+                if parent_key in main_df.columns:
+                    main_df = main_df.drop(columns=[parent_key])
+
+            # 同名カラムの衝突で生成された _dup サフィックス列はmain側を優先して削除
+            dup_cols = [c for c in main_df.columns if c.endswith('_dup')]
+            if dup_cols:
+                main_df = main_df.drop(columns=dup_cols)
             
         return main_df
 

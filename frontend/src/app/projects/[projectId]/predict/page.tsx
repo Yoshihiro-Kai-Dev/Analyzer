@@ -389,8 +389,34 @@ export default function PredictPage() {
                   </span>
                 </div>
                 {/* 出力CSVに含まれる列の説明 */}
-                <div className="text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2 font-mono">
-                  出力列: row_index, predicted_value, rank_small_to_large, rank_large_to_small, rank_percent
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-muted border-b">
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-40">列名</th>
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">説明</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {[
+                        { col: "row_index", desc: "入力CSVの行番号（0始まり）" },
+                        {
+                          col: "predicted_value",
+                          desc: selectedConfig?.task_type === "classification"
+                            ? "陽性クラス（1）の予測確率（0〜1）。値が高いほど陽性の可能性が高い"
+                            : "モデルによる予測値（回帰の場合はターゲット列と同じ単位）"
+                        },
+                        { col: "rank_small_to_large", desc: "predicted_value の昇順ランク（値が小さいほど順位が高い）" },
+                        { col: "rank_large_to_small", desc: "predicted_value の降順ランク（値が大きいほど順位が高い）" },
+                        { col: "rank_percent", desc: "全体に対する昇順パーセンタイル（0〜100%）。値が100%に近いほど predicted_value が大きい" },
+                      ].map(({ col, desc }) => (
+                        <tr key={col} className="hover:bg-muted/40">
+                          <td className="px-3 py-2 font-mono text-foreground whitespace-nowrap">{col}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{desc}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
 
                 {/* 統計サマリー */}
