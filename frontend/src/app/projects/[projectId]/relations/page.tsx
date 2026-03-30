@@ -69,12 +69,14 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 };
 
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowRight } from '@phosphor-icons/react';
 import { apiClient } from '@/lib/api'
 
 export default function RelationsPage() {
     const params = useParams();
     const projectId = params.projectId as string;
+    const router = useRouter();
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [loading, setLoading] = useState(true);
@@ -312,6 +314,14 @@ export default function RelationsPage() {
                         <Background gap={12} size={1} color="var(--color-border)" />
                     </ReactFlow>
                 )}
+            </div>
+
+            {/* 次のステップへの誘導ボタン */}
+            <div className="flex justify-end px-4 py-3 border-t bg-background shrink-0">
+                <Button size="lg" onClick={() => router.push(`/projects/${projectId}/analysis`)}>
+                    次のステップへ（分析設定）
+                    <ArrowRight className="w-4 h-4 ml-1" weight="bold" />
+                </Button>
             </div>
 
             <JoinConfigDialog
