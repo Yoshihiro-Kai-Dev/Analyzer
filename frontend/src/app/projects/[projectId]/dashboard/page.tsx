@@ -411,6 +411,13 @@ export default function DashboardPage() {
         return Math.max(count * 28, 300);
     }, [result?.feature_importance]);
 
+    // 学習実行ボタンが無効化される理由（null の場合は有効）
+    const trainDisabledReason = !configId
+        ? "分析設定を選択してください"
+        : (job?.status === "pending" || job?.status === "running")
+            ? "学習が実行中です"
+            : null;
+
     return (
         <div className="space-y-8 animate-fade-in">
             <div className="flex justify-between items-center">
@@ -430,10 +437,20 @@ export default function DashboardPage() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button onClick={startTraining} disabled={!configId || (job !== null && (job.status === "running" || job.status === "pending"))} className="bg-primary hover:opacity-90 text-primary-foreground">
-                        {job !== null && (job.status === "running" || job.status === "pending") ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-                        学習実行
-                    </Button>
+                    {/* 学習実行ボタン：無効時はツールチップで理由を表示 */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className={trainDisabledReason ? "cursor-not-allowed inline-flex" : "inline-flex"}>
+                                <Button onClick={startTraining} disabled={!!trainDisabledReason} className="bg-primary hover:opacity-90 text-primary-foreground">
+                                    {job !== null && (job.status === "running" || job.status === "pending") ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                                    学習実行
+                                </Button>
+                            </span>
+                        </TooltipTrigger>
+                        {trainDisabledReason && (
+                            <TooltipContent>{trainDisabledReason}</TooltipContent>
+                        )}
+                    </Tooltip>
 
                 </div>
             </div>

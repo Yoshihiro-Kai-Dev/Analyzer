@@ -7,6 +7,7 @@ import { addNotification } from "@/lib/notifications"
 import { buildColLabelsMap, stripTablePrefix } from "@/lib/labelUtils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, Download, Play, CheckCircle2, XCircle, Loader2, History } from "lucide-react"
@@ -322,24 +323,43 @@ export default function PredictPage() {
               />
             </div>
 
-            {/* 予測実行ボタン */}
-            <Button
-              onClick={handleRun}
-              disabled={!file || isRunning}
-              className="w-full"
-            >
-              {isRunning ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  予測中...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 mr-2" />
-                  予測実行
-                </>
-              )}
-            </Button>
+            {/* 予測実行ボタン：無効時はツールチップで理由を表示 */}
+            {(() => {
+              // 予測実行ボタンが無効化される理由（null の場合は有効）
+              const predictDisabledReason = !file
+                ? "CSVファイルを選択してください"
+                : isRunning
+                  ? "予測が実行中です"
+                  : null;
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={predictDisabledReason ? "cursor-not-allowed inline-flex w-full" : "inline-flex w-full"}>
+                      <Button
+                        onClick={handleRun}
+                        disabled={!!predictDisabledReason}
+                        className="w-full"
+                      >
+                        {isRunning ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            予測中...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-4 w-4 mr-2" />
+                            予測実行
+                          </>
+                        )}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {predictDisabledReason && (
+                    <TooltipContent>{predictDisabledReason}</TooltipContent>
+                  )}
+                </Tooltip>
+              );
+            })()}
           </CardContent>
         </Card>
       )}
