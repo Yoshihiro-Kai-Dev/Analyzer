@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { Play, Loader2, TrendingUp, BarChart2, Sparkles, HelpCircle, GitBranch, ListTree, Table2, XCircle, History, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -589,31 +589,29 @@ export default function DashboardPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-2 gap-4">
-                                <TooltipProvider>
-                                    {Object.entries(result.metrics).map(([key, value]: [string, any]) => {
-                                        const gradient = getMetricGradient(key);
-                                        const detail = getMetricDetailDescription(key);
-                                        return (
-                                            <Tooltip key={key}>
-                                                <TooltipTrigger asChild>
-                                                    {/* グラデーション背景カード */}
-                                                    <div className={`bg-gradient-to-br ${gradient} p-4 rounded-xl text-center cursor-help transition-opacity hover:opacity-90 shadow-sm`}>
-                                                        <div className="text-xs text-white/80 uppercase font-semibold flex items-center justify-center gap-1 mb-1">
-                                                            {key} <HelpCircle className="w-3 h-3" />
-                                                        </div>
-                                                        {/* 数値を大きく強調 */}
-                                                        <div className="text-3xl font-bold text-white drop-shadow">
-                                                            {typeof value === 'number' ? value.toFixed(4) : value}
-                                                        </div>
+                                {Object.entries(result.metrics).map(([key, value]: [string, any]) => {
+                                    const gradient = getMetricGradient(key);
+                                    const detail = getMetricDetailDescription(key);
+                                    return (
+                                        <Tooltip key={key}>
+                                            <TooltipTrigger asChild>
+                                                {/* グラデーション背景カード */}
+                                                <div className={`bg-gradient-to-br ${gradient} p-4 rounded-xl text-center cursor-help transition-opacity hover:opacity-90 shadow-sm`}>
+                                                    <div className="text-xs text-white/80 uppercase font-semibold flex items-center justify-center gap-1 mb-1">
+                                                        {key} <HelpCircle className="w-3 h-3" />
                                                     </div>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="max-w-xs text-xs leading-relaxed">
-                                                    <p>{detail}</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        );
-                                    })}
-                                </TooltipProvider>
+                                                    {/* 数値を大きく強調 */}
+                                                    <div className="text-3xl font-bold text-white drop-shadow">
+                                                        {typeof value === 'number' ? value.toFixed(4) : value}
+                                                    </div>
+                                                </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                                                <p>{detail}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    );
+                                })}
                             </div>
                         </CardContent>
                     </Card>
