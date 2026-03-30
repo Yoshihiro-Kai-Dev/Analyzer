@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Cpu, LogOut, User } from "lucide-react"
+import { ChartBar, ArrowLeft, SignOut, User } from "@phosphor-icons/react"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { apiClient } from "@/lib/api"
 import { removeToken, getToken } from "@/lib/auth"
@@ -42,10 +42,9 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
     // プロジェクト情報・ステップ完了状態を並行取得
     const fetchSidebarData = async () => {
       try {
-        const [projectRes, tablesRes, relationsRes, configsRes, jobsRes] = await Promise.allSettled([
+        const [projectRes, tablesRes, configsRes, jobsRes] = await Promise.allSettled([
           apiClient.get(`/api/projects/${projectId}`),
           apiClient.get(`/api/projects/${projectId}/tables`),
-          apiClient.get(`/api/projects/${projectId}/relations`),
           apiClient.get(`/api/projects/${projectId}/analysis/configs`),
           apiClient.get(`/api/projects/${projectId}/train/jobs`),
         ])
@@ -60,9 +59,8 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
         if (tablesRes.status === "fulfilled" && tablesRes.value.data?.length > 0) {
           completed.add(1)
         }
-        if (relationsRes.status === "fulfilled" && relationsRes.value.data?.length > 0) {
-          completed.add(2)
-        }
+        // Step2: リレーション設定は常時完了扱い（スキップ可能）
+        completed.add(2)
         if (configsRes.status === "fulfilled" && configsRes.value.data?.length > 0) {
           completed.add(3)
         }
@@ -93,8 +91,8 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
         className="h-12 px-4 flex items-center gap-2.5 shrink-0"
         style={{ borderBottom: "1px solid var(--sidebar-border)" }}
       >
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-400 flex items-center justify-center shadow-sm">
-          <Cpu className="w-4 h-4 text-white" />
+        <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-sm">
+          <ChartBar className="w-4 h-4 text-primary-foreground" weight="bold" />
         </div>
         <span className="font-bold text-sm" style={{ color: "var(--sidebar-foreground)" }}>
           分析くん
@@ -167,7 +165,7 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
           style={{ color: "var(--sidebar-foreground)" }}
           title="ログアウト"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          <SignOut className="w-3.5 h-3.5" />
         </button>
       </div>
     </aside>
