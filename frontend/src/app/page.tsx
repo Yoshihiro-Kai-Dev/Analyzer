@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
     Trash, Plus, Cpu, ShareNetwork, SignOut,
-    ChartBar, Clock, CaretRight, ArrowRight
+    ChartBar, Clock, CaretRight, ArrowRight, BookOpen
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -168,6 +168,18 @@ export default function PortalPage() {
                     <span className="text-base font-bold text-foreground tracking-tight">分析くん</span>
 
                     <div className="flex-1" />
+
+                    {/* マニュアルリンク */}
+                    <Link
+                        href="/manual"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        aria-label="マニュアルを開く"
+                        title="マニュアル"
+                    >
+                        <BookOpen className="w-4 h-4" weight="regular" />
+                    </Link>
 
                     {/* ユーザーアバター + メニュー */}
                     {currentUser && (
