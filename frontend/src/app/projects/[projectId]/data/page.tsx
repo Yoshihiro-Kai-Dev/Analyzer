@@ -6,7 +6,7 @@ import { FileUpload } from "@/components/file-upload"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, ChevronDown, ChevronRight, ArrowRight, Database, MoreHorizontal, Copy } from "lucide-react"
+import { Trash2, ChevronDown, ChevronRight, Database, MoreHorizontal, Copy } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -59,9 +59,6 @@ export default function DataPage() {
     const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
     const [deleting, setDeleting] = useState(false)
 
-    // アップロード完了後の次ステップ導線を表示するフラグ
-    const [showNextStep, setShowNextStep] = useState(false)
-
     // カラム詳細モーダルの状態
     const [colStats, setColStats] = useState<any | null>(null)
     const [colStatsLoading, setColStatsLoading] = useState(false)
@@ -98,10 +95,10 @@ export default function DataPage() {
     }, [projectId])
 
     // アップロード・型確認完了時のコールバック
-    // テーブル一覧を更新し、次ステップ導線を表示する
+    // テーブル一覧を更新してリレーション設定画面へ遷移する
     const handleUploadComplete = async () => {
         await fetchTables()
-        setShowNextStep(true)
+        router.push(`/projects/${projectId}/relations`)
     }
 
     // テーブルカードのアコーディオン展開・折りたたみを切り替える
@@ -197,11 +194,6 @@ export default function DataPage() {
         }
     }
 
-    // リレーション設定画面へ遷移する
-    const handleGoToRelations = () => {
-        router.push(`/projects/${projectId}/relations`)
-    }
-
     return (
         <div className="animate-fade-in">
             <div className="mb-8">
@@ -211,39 +203,6 @@ export default function DataPage() {
 
                 {/* ファイルアップロードコンポーネント（アップロード完了後にテーブル一覧を再取得） */}
                 <FileUpload projectId={projectId} onUploadComplete={handleUploadComplete} />
-
-                {/* ── アップロード完了後の次ステップ導線 ── */}
-                {showNextStep && (
-                    <div className="mt-6">
-                        <div className="bg-primary/10 border border-primary/30 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                            <div>
-                                <p className="font-semibold text-primary text-base">型確認が完了しました</p>
-                                <p className="text-sm text-primary/80 mt-0.5">
-                                    次はテーブル間のリレーション（結合条件）を設定してください。
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                {/* 「続けてアップロード」で導線を非表示にする */}
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-muted-foreground text-xs"
-                                    onClick={() => setShowNextStep(false)}
-                                >
-                                    続けてアップロード
-                                </Button>
-                                {/* リレーション設定への目立つ導線ボタン */}
-                                <Button
-                                    onClick={handleGoToRelations}
-                                    className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
-                                >
-                                    リレーション設定へ進む
-                                    <ArrowRight className="w-4 h-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {/* ── アップロード済みテーブル一覧セクション ── */}
                 <div className="mt-10">

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
-import { CheckCircle2, Circle, Loader2 } from "lucide-react"
+import { CheckCircle, Circle, CircleNotch, Plus, ArrowRight } from "@phosphor-icons/react"
 import axios from "axios"
 import { apiClient } from '@/lib/api'
 
@@ -30,11 +30,15 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
     const [reviewColumns, setReviewColumns] = useState<any[]>([])
     const [reviewTableId, setReviewTableId] = useState<number | null>(null)
     const pollingInterval = useRef<NodeJS.Timeout | null>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
+    const [resetKey, setResetKey] = useState(0)
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setFile(e.target.files[0])
+            // resetState() は setFile(null) を呼ぶため、先に選択ファイルを退避してから再セットする
+            const selectedFile = e.target.files[0]
             resetState()
+            setFile(selectedFile)
         }
     }
 
@@ -51,6 +55,12 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
             clearInterval(pollingInterval.current)
             pollingInterval.current = null
         }
+        // <input type="file"> のDOM値をリセット（React stateでは制御不可のため直接操作）
+        if (inputRef.current) {
+            inputRef.current.value = ""
+        }
+        setResetKey(prev => prev + 1)
+        setFile(null)
     }
 
     const updateReviewColumnType = (columnId: number, newType: string) => {
@@ -74,8 +84,6 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                 )
             )
             setStatus("completed")
-            // 親コンポーネントにアップロード完了を通知（テーブル一覧の更新など）
-            onUploadComplete?.()
         } catch (err: any) {
             const detail = err.response?.data?.detail
             setError(typeof detail === 'string' ? detail : "型情報の保存に失敗しました")
@@ -215,7 +223,7 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
             <CardContent className="space-y-6">
                 <div className="grid w-full max-w-sm items-center gap-1.5">
                     <Label htmlFor="csv-file">CSVファイル</Label>
-                    <Input id="csv-file" type="file" accept=".csv" onChange={handleFileChange} disabled={status !== "idle" && status !== "completed"} />
+                    <Input id="csv-file" type="file" accept=".csv" onChange={handleFileChange} disabled={status !== "idle" && status !== "completed"} key={resetKey} ref={inputRef} />
                 </div>
 
                 {/* Progress Steps */}
@@ -224,9 +232,9 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                         {/* Step 1: Upload */}
                         <div className="flex items-center gap-3">
                             {status === "uploading" && uploadProgress < 100 ? (
-                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                <CircleNotch className="h-5 w-5 animate-spin text-primary" />
                             ) : (
-                                <CheckCircle2 className={`h-5 w-5 ${uploadProgress === 100 ? "text-primary" : "text-muted-foreground/30"}`} />
+                                <CheckCircle className={`h-5 w-5 ${uploadProgress === 100 ? "text-primary" : "text-muted-foreground/30"}`} weight={uploadProgress === 100 ? "fill" : "regular"} />
                             )}
                             <div className="flex-1 space-y-1">
                                 <div className="flex justify-between text-sm font-medium">
@@ -240,9 +248,9 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                         {/* Step 2: Processing */}
                         <div className="flex items-center gap-3">
                             {status === "processing" ? (
-                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                <CircleNotch className="h-5 w-5 animate-spin text-primary" />
                             ) : status === "type_review" || status === "completed" ? (
-                                <CheckCircle2 className="h-5 w-5 text-primary" />
+                                <CheckCircle className="h-5 w-5 text-primary" weight="fill" />
                             ) : (
                                 <Circle className="h-5 w-5 text-muted-foreground/30" />
                             )}
@@ -261,9 +269,9 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                         {/* Step 3: Type Review */}
                         <div className="flex items-center gap-3">
                             {status === "type_review" ? (
-                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                <CircleNotch className="h-5 w-5 animate-spin text-primary" />
                             ) : status === "completed" ? (
-                                <CheckCircle2 className="h-5 w-5 text-primary" />
+                                <CheckCircle className="h-5 w-5 text-primary" weight="fill" />
                             ) : (
                                 <Circle className="h-5 w-5 text-muted-foreground/30" />
                             )}
@@ -351,55 +359,39 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                 )}
 
                 {/* Completed Step */}
-                {status === "completed" && result && (
-                    <div className="space-y-4 pt-4 border-t">
-                        <Alert className="bg-primary/10 border-primary/20">
-                            <CheckCircle2 className="h-4 w-4 text-primary" />
-                            <AlertTitle className="text-primary">完了</AlertTitle>
-                            <AlertDescription className="text-primary/90">{result.message}</AlertDescription>
-                        </Alert>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="border rounded-md p-4 bg-white">
-                                <h3 className="font-semibold mb-2 text-sm text-gray-500 uppercase">ファイル情報</h3>
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-sm"><span className="text-gray-600">ファイル名:</span> <span className="font-medium">{result.filename}</span></div>
-                                    <div className="flex justify-between text-sm"><span className="text-gray-600">保存テーブル:</span> <span className="font-medium">{result.physical_table_name}</span></div>
-                                    <div className="flex justify-between text-sm"><span className="text-gray-600">行数:</span> <span className="font-medium">{result.rows.toLocaleString()} 行</span></div>
-                                </div>
+                {status === "completed" && (
+                    <div className="rounded-xl border-2 border-green-200 bg-green-50 p-5 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shrink-0">
+                                <CheckCircle className="w-5 h-5 text-primary-foreground" weight="fill" />
+                            </div>
+                            <div>
+                                <p className="font-bold text-sm text-green-900">
+                                    {file?.name ?? "ファイル"} を登録しました
+                                </p>
+                                <p className="text-xs text-green-700 mt-0.5">
+                                    カラム型を確認済み
+                                </p>
                             </div>
                         </div>
-
-                        <div className="border rounded-md p-0 overflow-hidden">
-                            <div className="bg-gray-100 px-4 py-2 border-b">
-                                <h3 className="font-semibold text-sm text-gray-700">カラム定義 (推論結果)</h3>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>カラム名</TableHead>
-                                            <TableHead>Pandas型</TableHead>
-                                            <TableHead>推論型</TableHead>
-                                            <TableHead>サンプル値（上位3件）</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {reviewColumns.map((col: any) => (
-                                            <TableRow key={col.id}>
-                                                <TableCell className="font-medium">{col.physical_name}</TableCell>
-                                                <TableCell>{col.data_type}</TableCell>
-                                                <TableCell>
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeBadgeClass(col.inferred_type)}`}>
-                                                        {typeLabel(col.inferred_type)}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="text-gray-500 text-sm">{col.sample_values?.join(", ")}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                        <div className="flex gap-3">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => resetState()}
+                            >
+                                <Plus className="w-4 h-4" />
+                                別のファイルを追加
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => onUploadComplete?.()}
+                            >
+                                次のステップへ
+                                <ArrowRight className="w-4 h-4" />
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -409,12 +401,12 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                     <Button onClick={handleConfirmTypes}>
                         確定する
                     </Button>
-                ) : (
+                ) : status !== "completed" ? (
                     <Button onClick={handleUpload} disabled={!file || status === "uploading" || status === "processing"}>
                         {status === "uploading" ? "アップロード中..." :
                             status === "processing" ? "処理中..." : "アップロード実行"}
                     </Button>
-                )}
+                ) : null}
             </CardFooter>
         </Card>
     )
