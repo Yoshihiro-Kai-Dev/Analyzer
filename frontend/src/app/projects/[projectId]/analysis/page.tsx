@@ -622,10 +622,10 @@ export default function AnalysisConfigPage() {
                         // ステップごとに「次へ」ボタンが無効化される理由を計算する
                         const nextDisabledReason =
                             step === 1
-                                ? !mainTableId
-                                    ? "テーブルを選択してください"
-                                    : !configName.trim()
-                                        ? "設定名を入力してください"
+                                ? !configName.trim()
+                                    ? "設定名を入力してください"
+                                    : !mainTableId
+                                        ? "テーブルを選択してください"
                                         : null
                                 : step === 2
                                     ? !targetColumnId
