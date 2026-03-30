@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -20,7 +20,7 @@ type Column = {
     value_labels: Record<string, string> | null
 }
 
-type LabelRow = { key: string; label: string }
+type LabelRow = { id: number; key: string; label: string }
 
 interface LabelEditDialogProps {
     table: { id: number; original_filename: string; columns: Column[] } | null
@@ -39,14 +39,35 @@ export function LabelEditDialog({ table, projectId, isOpen, onClose, onSaved }: 
     const [saving, setSaving] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
 
+    // 安定した行IDを生成するためのカウンター
+    const nextRowIdRef = useRef(0)
+
+    // カテゴリ列の一覧をメモ化する（table が null の場合は空配列）
+    const catCols = useMemo(
+        () => table ? table.columns.filter(c => c.inferred_type === "categorical") : [],
+        [table]
+    )
+
+    // 変更があった列のみをメモ化して検出する
+    const changedColIds = useMemo(
+        () => catCols
+            .map(col => col.id)
+            .filter(colId => {
+                const current = JSON.stringify(editState[colId] ?? [])
+                const original = JSON.stringify(originalState[colId] ?? [])
+                return current !== original
+            }),
+        [catCols, editState, originalState]
+    )
+
     // モーダルが開いた時点でカテゴリ列の初期値をセットする
     useEffect(() => {
         if (!isOpen || !table) return
-        const catCols = table.columns.filter(c => c.inferred_type === "categorical")
+        const cols = table.columns.filter(c => c.inferred_type === "categorical")
         const initial: Record<number, LabelRow[]> = {}
-        catCols.forEach(col => {
+        cols.forEach(col => {
             const rows: LabelRow[] = col.value_labels
-                ? Object.entries(col.value_labels).map(([k, v]) => ({ key: k, label: v }))
+                ? Object.entries(col.value_labels).map(([k, v]) => ({ id: nextRowIdRef.current++, key: k, label: v }))
                 : []
             initial[col.id] = rows
         })
@@ -58,13 +79,11 @@ export function LabelEditDialog({ table, projectId, isOpen, onClose, onSaved }: 
 
     if (!table) return null
 
-    const catCols = table.columns.filter(c => c.inferred_type === "categorical")
-
     // 行を追加する
     const addRow = (colId: number) => {
         setEditState(prev => ({
             ...prev,
-            [colId]: [...(prev[colId] ?? []), { key: "", label: "" }],
+            [colId]: [...(prev[colId] ?? []), { id: nextRowIdRef.current++, key: "", label: "" }],
         }))
     }
 
@@ -85,23 +104,14 @@ export function LabelEditDialog({ table, projectId, isOpen, onClose, onSaved }: 
         })
     }
 
-    // 変更があった列のみを検出する
-    const changedColIds = catCols
-        .map(col => col.id)
-        .filter(colId => {
-            const current = JSON.stringify(editState[colId] ?? [])
-            const original = JSON.stringify(originalState[colId] ?? [])
-            return current !== original
-        })
-
     // 保存処理: 変更列のみ PATCH を並列実行する
     const handleSave = async () => {
         if (!table) return
         setSaving(true)
         setSaveError(null)
         try {
-            const updatedColumns = [...table.columns]
-            await Promise.all(
+            // 各列を並列PATCHし、結果を収集する
+            const results = await Promise.all(
                 changedColIds.map(async colId => {
                     // 空キーの行をフィルタリングして value_labels オブジェクトを構築する
                     const rows = (editState[colId] ?? []).filter(r => r.key.trim() !== "")
@@ -110,16 +120,18 @@ export function LabelEditDialog({ table, projectId, isOpen, onClose, onSaved }: 
                         `/api/projects/${projectId}/tables/${table.id}/columns/${colId}`,
                         { value_labels }
                     )
-                    // ローカルのカラム配列を更新する
-                    const idx = updatedColumns.findIndex(c => c.id === colId)
-                    if (idx !== -1) {
-                        updatedColumns[idx] = { ...updatedColumns[idx], value_labels }
-                    }
+                    return { colId, value_labels }
                 })
+            )
+            // 全PATCH完了後にカラム配列を再構築する（競合状態を回避）
+            const labelMap = Object.fromEntries(results.map(r => [r.colId, r.value_labels]))
+            const updatedColumns = table.columns.map(c =>
+                labelMap[c.id] !== undefined ? { ...c, value_labels: labelMap[c.id] } : c
             )
             onSaved(table.id, updatedColumns)
             onClose()
-        } catch {
+        } catch (err) {
+            console.error("ラベル保存エラー:", err)
             setSaveError("保存に失敗しました。もう一度お試しください。")
         } finally {
             setSaving(false)
@@ -162,7 +174,7 @@ export function LabelEditDialog({ table, projectId, isOpen, onClose, onSaved }: 
                                     ) : (
                                         (editState[col.id] ?? []).map((row, idx) => (
                                             <div
-                                                key={idx}
+                                                key={row.id}
                                                 className="grid grid-cols-[1fr_1fr_40px] gap-1 px-2 py-1.5 border-b last:border-b-0 items-center"
                                             >
                                                 <Input
