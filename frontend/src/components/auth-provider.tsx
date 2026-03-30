@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { isAuthenticated } from '@/lib/auth'
 
 // 認証チェックを除外するパス（ログイン・登録ページはリダイレクト不要）
-const PUBLIC_PATHS = ['/login', '/register']
+const PUBLIC_PATHS = ['/login', '/register', '/manual']
 
 interface AuthProviderProps {
     children: React.ReactNode
