@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 import pandas as pd
 import datetime
 import os
@@ -28,7 +28,7 @@ def _update_task(task_id: str, **kwargs) -> None:
         db.close()
 
 
-def process_upload_task(task_id: str, project_id: int, file_path: str, original_filename: str):
+def process_upload_task(task_id: str, project_id: int, file_path: str, original_filename: str, categorical_threshold: int = 20):
     """
     バックグラウンドでCSVを処理しDBに保存する関数
     処理状態はインメモリではなくDBで管理する
@@ -53,8 +53,13 @@ def process_upload_task(task_id: str, project_id: int, file_path: str, original_
         for col in preview_df.columns:
             dtype = str(preview_df[col].dtype)
             col_type = "unknown"
-            if "int" in dtype or "float" in dtype:
+            if "float" in dtype:
+                # 小数は連続値とみなし numeric に分類する
                 col_type = "numeric"
+            elif "int" in dtype:
+                # 整数はユニーク値数が閾値以下の場合 categorical と判断する
+                nunique = preview_df[col].nunique()
+                col_type = "categorical" if nunique <= categorical_threshold else "numeric"
             elif "object" in dtype:
                 col_type = "categorical"
             elif "datetime" in dtype:
@@ -134,7 +139,8 @@ def process_upload_task(task_id: str, project_id: int, file_path: str, original_
 async def upload_csv(
     project_id: int,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    categorical_threshold: int = Form(default=20),
 ):
     """
     CSVファイルを受け取り、バックグラウンド処理を開始する。
@@ -170,7 +176,7 @@ async def upload_csv(
         shutil.copyfileobj(file.file, buffer)
 
     # バックグラウンドタスクの登録
-    background_tasks.add_task(process_upload_task, task_id, project_id, temp_file_path, file.filename)
+    background_tasks.add_task(process_upload_task, task_id, project_id, temp_file_path, file.filename, categorical_threshold)
 
     return {
         "task_id": task_id,

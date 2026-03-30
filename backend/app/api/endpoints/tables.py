@@ -264,10 +264,12 @@ def get_label_suggestions(
     if not table:
         raise HTTPException(status_code=404, detail="テーブルが見つかりません")
 
-    # value_labels 未設定のカテゴリ列を取得する
+    # value_labels 未設定の全カラムを取得する
+    # inferred_type は type_review でユーザーが変更するため、ここでは絞り込まない
+    # （アップロード時の型推論は int/float を常に numeric と分類するため、
+    #   categorical フィルターを掛けると候補が一切返らなくなる）
     target_cols = db.query(models.ColumnMetadata).filter(
         models.ColumnMetadata.table_id == table_id,
-        models.ColumnMetadata.inferred_type == "categorical",
         models.ColumnMetadata.value_labels == None,  # noqa: E711
     ).all()
 
