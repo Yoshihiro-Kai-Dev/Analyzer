@@ -276,7 +276,7 @@ export default function RelationsPage() {
     const { source, target, sourceColumn, targetColumn } = getPendingNodes();
 
     return (
-        <div className="w-full h-screen flex flex-col">
+        <div className="w-full h-full flex flex-col">
             <header className="p-4 border-b bg-background flex justify-between items-center shadow-sm z-10">
                 <div className="flex flex-col">
                     <h1 className="text-xl font-bold text-foreground">リレーション定義 (ER図)</h1>
