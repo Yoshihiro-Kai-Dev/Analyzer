@@ -356,6 +356,16 @@
   box-shadow: none;
 }
 
+/* クリック可能要素のカーソルを統一 */
+button:not(:disabled),
+[role="button"],
+label,
+input[type="file"],
+select,
+a[href] {
+  cursor: pointer;
+}
+
 @keyframes shimmer {
   from { width: 30%; margin-left: 0; }
   to   { width: 50%; margin-left: 50%; }

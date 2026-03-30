@@ -17,9 +17,11 @@ interface FileUploadProps {
     projectId: string
     /** アップロード・型確認が完了したときに呼ばれるコールバック */
     onUploadComplete?: () => void
+    /** テーブル登録完了時（completed遷移直後）に呼ばれるコールバック */
+    onTableRegistered?: () => void
 }
 
-export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
+export function FileUpload({ projectId, onUploadComplete, onTableRegistered }: FileUploadProps) {
     const [file, setFile] = useState<File | null>(null)
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "type_review" | "completed">("idle")
     const [uploadProgress, setUploadProgress] = useState(0)
@@ -84,6 +86,8 @@ export function FileUpload({ projectId, onUploadComplete }: FileUploadProps) {
                 )
             )
             setStatus("completed")
+            // テーブル一覧を即時更新するためコールバックを呼び出す
+            onTableRegistered?.()
         } catch (err: any) {
             const detail = err.response?.data?.detail
             setError(typeof detail === 'string' ? detail : "型情報の保存に失敗しました")
