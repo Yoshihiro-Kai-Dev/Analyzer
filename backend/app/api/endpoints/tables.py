@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from app.db.session import get_db
@@ -241,3 +241,100 @@ def copy_table(
     db.commit()
     db.refresh(new_table)
     return new_table
+
+
+@router.get("/{table_id}/label-suggestions")
+def get_label_suggestions(
+    project_id: int,
+    table_id: int,
+    min_overlap_rate: int = Query(default=30, ge=0, le=100),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    新規テーブルのカテゴリ列に対し、同プロジェクト内の既存 value_labels 定義を候補として返す。
+    同名カラム（physical_name 一致）かつ値の重複率が min_overlap_rate 以上のものを返す。
+    """
+    # 対象テーブルを取得する（プロジェクト整合性チェック込み）
+    table = db.query(models.TableMetadata).filter(
+        models.TableMetadata.id == table_id,
+        models.TableMetadata.project_id == project_id,
+    ).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="テーブルが見つかりません")
+
+    # value_labels 未設定のカテゴリ列を取得する
+    target_cols = db.query(models.ColumnMetadata).filter(
+        models.ColumnMetadata.table_id == table_id,
+        models.ColumnMetadata.inferred_type == "categorical",
+        models.ColumnMetadata.value_labels == None,  # noqa: E711
+    ).all()
+
+    # N+1 クエリと DetachedInstanceError を回避するため、プロジェクト内テーブル名を事前にマップ取得する
+    project_tables = db.query(models.TableMetadata).filter(
+        models.TableMetadata.project_id == project_id
+    ).all()
+    table_name_map = {t.id: t.original_filename for t in project_tables}
+
+    result = []
+    for col in target_cols:
+        # 同プロジェクト内の他テーブルで同名カラムかつ value_labels が設定済みのものを検索する
+        matching_cols = (
+            db.query(models.ColumnMetadata)
+            .join(models.TableMetadata, models.ColumnMetadata.table_id == models.TableMetadata.id)
+            .filter(
+                models.TableMetadata.project_id == project_id,
+                models.TableMetadata.id != table_id,
+                models.ColumnMetadata.physical_name == col.physical_name,
+                models.ColumnMetadata.value_labels != None,  # noqa: E711
+            )
+            .all()
+        )
+
+        if not matching_cols:
+            continue
+
+        # 新テーブルの実データから NULL を除いた DISTINCT 値を取得する
+        try:
+            rows = db.execute(
+                sqlalchemy.text(
+                    f'SELECT DISTINCT CAST("{col.physical_name}" AS TEXT) '
+                    f'FROM "{table.physical_table_name}" '
+                    f'WHERE "{col.physical_name}" IS NOT NULL'
+                )
+            ).fetchall()
+            new_values = {str(r[0]) for r in rows}
+        except Exception:
+            continue
+
+        if not new_values:
+            continue
+
+        # 既存 value_labels キーとの重複率を計算し閾値以上の候補を収集する
+        suggestions = []
+        for match_col in matching_cols:
+            existing_keys = set(match_col.value_labels.keys())
+            overlap = new_values & existing_keys
+            overlap_rate = int(len(overlap) / len(new_values) * 100)
+            if overlap_rate >= min_overlap_rate:
+                suggestions.append({
+                    "source_table_id": match_col.table_id,
+                    # table_name_map で名前を解決する（lazy load / DetachedInstanceError 回避）
+                    "source_table_name": table_name_map.get(match_col.table_id, ""),
+                    "source_column_id": match_col.id,
+                    "value_labels": match_col.value_labels,
+                    "overlap_rate": overlap_rate,
+                })
+
+        if not suggestions:
+            continue
+
+        # 重複率降順でソートする
+        suggestions.sort(key=lambda x: x["overlap_rate"], reverse=True)
+        result.append({
+            "column_id": col.id,
+            "column_name": col.physical_name,
+            "suggestions": suggestions,
+        })
+
+    return result
