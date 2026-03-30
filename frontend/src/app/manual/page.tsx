@@ -8,6 +8,7 @@ import {
   ArrowRight, Table, ChartBar as ChartBarIcon, ArrowLeft,
   NumberCircleOne, NumberCircleTwo, NumberCircleThree,
   NumberCircleFour, NumberCircleFive,
+  GitBranch, ListBullets,
 } from "@phosphor-icons/react"
 
 // ────────────────────────────────────────────────────────────
@@ -424,6 +425,55 @@ export default function ManualPage() {
                 ["n.s.", "有意でない：偶然の可能性あり（参考程度）"],
               ]}
             />
+
+            <SectionTitle><NumberCircleFive className="w-4 h-4 text-emerald-600" weight="fill" />決定木 可視化 / 分岐ルール一覧（LightGBMのみ）</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              LightGBMを選択した場合、内部で補助的に学習した<strong className="text-foreground">深さ5の決定木</strong>が2つの形式で表示されます。
+              実際の予測はLightGBMが行っており、「モデルが大まかにどんな基準で判断しているか」を把握するための参考情報です。
+            </p>
+
+            {/* 決定木 可視化 */}
+            <div className="flex items-center gap-2 mb-3 mt-5">
+              <GitBranch className="w-4 h-4 text-emerald-700 shrink-0" />
+              <p className="text-sm font-semibold text-foreground">決定木 可視化</p>
+            </div>
+            <NiceTable
+              headers={["ノードの色", "種類", "表示内容"]}
+              rows={[
+                ["青（分岐）", "条件の分かれ目", "特徴量名・しきい値（例: 年齢 ≤ 30）・不純度(gini)・サンプル数"],
+                ["緑（葉）",   "予測結果",       "予測値・確信度（分類）または安定度±std（回帰）・サンプル数"],
+              ]}
+            />
+            <p className="text-sm text-muted-foreground leading-relaxed mt-2 mb-1">
+              接続線のラベルは進む方向の条件を示します。
+              左側のパスが <code className="text-xs bg-muted px-1 py-0.5 rounded">≤ しきい値</code>（以下）、
+              右側が <code className="text-xs bg-muted px-1 py-0.5 rounded">&gt; しきい値</code>（より大きい）です。
+            </p>
+            <Callout type="info">グラフはドラッグで移動、マウスホイールでズームできます。ノードが多い場合は縮小して全体像を確認してください。</Callout>
+
+            {/* 分岐ルール一覧 */}
+            <div className="flex items-center gap-2 mb-3 mt-5">
+              <ListBullets className="w-4 h-4 text-emerald-700 shrink-0" />
+              <p className="text-sm font-semibold text-foreground">分岐ルール一覧</p>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              決定木の各「葉ノード」に至るまでの条件をIF/THEN形式で表示します。
+              <strong className="text-foreground">「どんな条件が揃うとどんな予測になるか」</strong>を文章で確認できます。
+            </p>
+            <NiceTable
+              headers={["項目", "意味"]}
+              rows={[
+                ["条件チップ（AND）",       "そのルートを通るために必要な条件をANDでつなげたもの"],
+                ["→ 予測",                  "すべての条件を満たした場合のモデルの予測値"],
+                ["確信度 XX%（分類）",       "該当サンプルのうち、実際にその予測クラスだった割合。高いほど信頼性が高い"],
+                ["安定度：高/中/低（回帰）", "標準偏差を予測値で割った変動係数が基準。高=20%未満、中=50%未満、低=50%以上"],
+                ["n=XX",                    "そのルートを通ったデータ件数"],
+              ]}
+            />
+            <Callout type="tip">
+              <strong>並び順：</strong>分類タスクは確信度の高い順、回帰タスクは安定度の高い（ばらつきが小さい）順で表示されます。
+              確信度90%以上のルールを探して、その条件を業務ルールとして検証するといった活用ができます。
+            </Callout>
           </section>
 
           {/* ═══ Step 5 ═══ */}
