@@ -19,11 +19,19 @@ export function getNotifications(): Notification[] {
   }
 }
 
+// HTTP環境でも動作するID生成（crypto.randomUUIDはHTTPSのみ保証）
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 // 通知を追加する
 export function addNotification(type: Notification['type'], message: string): void {
   const notifications = getNotifications()
   const newNotif: Notification = {
-    id: crypto.randomUUID(),
+    id: generateId(),
     type,
     message,
     createdAt: Date.now(),

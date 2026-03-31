@@ -2,11 +2,13 @@ import pandas as pd
 import numpy as np
 import lightgbm as lgb
 import joblib
+import shap as shap_lib
 import statsmodels.api as sm
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, roc_auc_score, f1_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.utils.multiclass import type_of_target
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.tree import _tree as sk_tree
 from sqlalchemy.orm import Session
@@ -79,7 +81,18 @@ class MLService:
             job.message = f"Training ({config.task_type} / {model_type})..."
             self.db.commit()
 
+            # タスクタイプと目的変数の型の整合性チェック
+            detected_target_type = type_of_target(y)
+            if config.task_type == 'classification' and detected_target_type == 'continuous':
+                raise ValueError(
+                    f"タスクタイプが「分類」に設定されていますが、目的変数「{config.target_column.physical_name}」は連続値（数値）です。"
+                    "分析設定でタスクタイプを「回帰」に変更するか、離散的なカテゴリ値を持つ列を目的変数に選択してください。"
+                )
+
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+            # SHAP値（LightGBMのみ計算。線形モデルはNone）
+            shap_list = None
 
             if model_type == 'logistic_regression':
                 # ── sklearn ロジスティック回帰 / 線形回帰 ──────────────────
@@ -151,6 +164,28 @@ class MLService:
                 X_test_s  = X_test  # スケーリングなし
                 coef_stats = None   # 勾配ブースティングは係数統計量なし
 
+                # SHAP値を計算（TreeExplainer使用、テストデータで計算）
+                # 計算失敗時は非致命的としてNoneを設定する
+                shap_list = None
+                try:
+                    shap_explainer = shap_lib.TreeExplainer(sk_model)
+                    shap_matrix = shap_explainer.shap_values(X_test)
+                    # multiclass分類の場合はクラスごとの配列リストになる
+                    # 方向性が不明確なため絶対値の平均で統合する
+                    if isinstance(shap_matrix, list):
+                        shap_arr = np.mean([np.abs(s) for s in shap_matrix], axis=0)
+                        shap_mean_vals = pd.Series(shap_arr.mean(axis=0), index=feature_names)
+                    else:
+                        # 回帰・二値分類は符号あり平均（正負の方向を保持）
+                        shap_mean_vals = pd.Series(shap_matrix.mean(axis=0), index=feature_names)
+                    shap_list = [
+                        {"feature": k, "shap_value": float(v)}
+                        for k, v in shap_mean_vals.sort_values(key=abs, ascending=False).head(20).items()
+                    ]
+                    logger.info(f"[ML-JOB] SHAP computed: {len(shap_list)} features")
+                except Exception as e:
+                    logger.warning(f"[ML-JOB] SHAP computation failed (non-fatal): {e}")
+
             job.progress = 80
             self.db.commit()
 
@@ -220,6 +255,7 @@ class MLService:
                 job_id=job.id,
                 metrics=metrics,
                 feature_importance=fi_list,
+                shap_importance=shap_list,
                 ai_analysis_text=insight_text,
                 model_path=model_path,
                 model_type=model_type,
@@ -253,7 +289,8 @@ class MLService:
         # 必要なカラムだけ読みたいが、とりあえず全件
         # ターゲットカラムは必ず必要
         # TODO: chunking / Memory optimisation
-        main_df = pd.read_sql(f"SELECT * FROM {main_table_name}", self.engine)
+        # テーブル名を二重引用符でクォートして日本語・特殊文字を含む名前に対応
+        main_df = pd.read_sql(f'SELECT * FROM "{main_table_name}"', self.engine)
         
         # 2. Join Relations (OneToMany -> Aggregation)
         # config.feature_settings に従って集約... としたいが、
@@ -269,7 +306,7 @@ class MLService:
             child_table = self.db.query(models.TableMetadata).filter(models.TableMetadata.id == rel.child_table_id).first()
             if not child_table: continue
             
-            child_df = pd.read_sql(f"SELECT * FROM {child_table.physical_table_name}", self.engine)
+            child_df = pd.read_sql(f'SELECT * FROM "{child_table.physical_table_name}"', self.engine)
             
             join_keys = rel.join_keys # {"parent_col": "p_id", "child_col": "c_id"}
             parent_key = join_keys.get("parent_col")
@@ -305,7 +342,7 @@ class MLService:
             parent_table = self.db.query(models.TableMetadata).filter(models.TableMetadata.id == rel.parent_table_id).first()
             if not parent_table: continue
 
-            parent_df = pd.read_sql(f"SELECT * FROM {parent_table.physical_table_name}", self.engine)
+            parent_df = pd.read_sql(f'SELECT * FROM "{parent_table.physical_table_name}"', self.engine)
 
             join_keys = rel.join_keys
             parent_key = join_keys.get("parent_col")

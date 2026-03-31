@@ -135,6 +135,7 @@ class AnalysisConfig(AnalysisConfigBase):
 class TrainResultBase(BaseModel):
     metrics: Dict[str, float]
     feature_importance: List[Dict[str, Any]]
+    shap_importance: Optional[List[Dict[str, Any]]] = None
     ai_analysis_text: Optional[str] = None
     model_path: Optional[str] = None
     model_type: Optional[str] = None

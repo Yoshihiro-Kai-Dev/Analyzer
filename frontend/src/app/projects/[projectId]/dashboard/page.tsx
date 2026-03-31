@@ -2,12 +2,10 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Play, CircleNotch, TrendUp, ChartBar, Sparkle, Question, GitBranch, ListBullets, Table, Warning, ClockCounterClockwise, CaretRight } from '@phosphor-icons/react';
+import { Play, CircleNotch, Question, GitBranch, ListBullets, Table, Sparkle } from '@phosphor-icons/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import ReactFlow, {
@@ -91,8 +89,8 @@ function flattenTree(node: any, nodes: Node[], edges: Edge[], parentId?: string,
             target: id,
             label: edgeLabel,
             type: 'smoothstep',
-            style: { stroke: '#94a3b8', strokeWidth: 1.5 },
-            labelStyle: { fontSize: 10, fill: '#64748b' },
+            style: { stroke: '#a1a1aa', strokeWidth: 1.5 },
+            labelStyle: { fontSize: 10, fill: '#71717a' },
             labelBgStyle: { fill: 'white' },
         });
     }
@@ -127,17 +125,17 @@ function pValueLabel(p: number): { mark: string; color: string } {
 // ── ルールバッジ色（分類: 確信度 / 回帰: 安定度） ────────────
 function confidenceBadge(conf: number | null) {
     if (conf == null) return 'secondary';
-    if (conf >= 0.8) return 'default';   // 緑
-    if (conf >= 0.6) return 'secondary'; // 黄
-    return 'outline';                     // 灰
+    if (conf >= 0.8) return 'default';
+    if (conf >= 0.6) return 'secondary';
+    return 'outline';
 }
 
 // CV = std / |prediction| による安定度 (回帰用)
 function stabilityBadge(std: number, prediction: number): 'default' | 'secondary' | 'outline' {
     const cv = Math.abs(prediction) > 0.001 ? std / Math.abs(prediction) : 1;
-    if (cv < 0.2) return 'default';   // 緑: 安定
-    if (cv < 0.4) return 'secondary'; // 黄: 普通
-    return 'outline';                  // 灰: 不安定
+    if (cv < 0.2) return 'default';
+    if (cv < 0.4) return 'secondary';
+    return 'outline';
 }
 function stabilityLabel(std: number, prediction: number): string {
     const cv = Math.abs(prediction) > 0.001 ? std / Math.abs(prediction) : 1;
@@ -147,57 +145,42 @@ function stabilityLabel(std: number, prediction: number): string {
 }
 
 // ── 指標の詳細説明（ツールチップ用）────────────────────────────
-const METRIC_DETAILS: Record<string, { label: string; gradient: string; description: string }> = {
+const METRIC_DETAILS: Record<string, { label: string; description: string; unit?: string }> = {
     rmse: {
         label: 'RMSE',
-        gradient: 'from-violet-600 to-indigo-500',
         description: '二乗平均平方根誤差（Root Mean Squared Error）。予測値と実測値の差を二乗して平均し、その平方根を取ります。0に近いほど予測精度が高く、外れ値の影響を受けやすい特性があります。単位は目的変数と同じです。',
     },
     mae: {
         label: 'MAE',
-        gradient: 'from-indigo-500 to-blue-500',
         description: '平均絶対誤差（Mean Absolute Error）。予測値と実測値の差の絶対値の平均です。外れ値の影響を受けにくく、直感的な解釈が可能です。単位は目的変数と同じです。',
     },
     r2: {
         label: 'R²',
-        gradient: 'from-emerald-600 to-teal-500',
         description: '決定係数（R-squared）。モデルがデータの変動をどれだけ説明できているかを示します。1.0が完全な予測、0.0がランダムと同等、負の値は予測が平均値より悪いことを意味します。回帰モデルの総合評価に使われます。',
+        unit: '',
     },
     accuracy: {
         label: 'Accuracy',
-        gradient: 'from-emerald-500 to-emerald-400',
         description: '正解率（Accuracy）。全データ件数のうち正しく分類できた割合です。0〜1の範囲で1に近いほど良好です。クラスの偏りが大きいデータセットでは過大評価されやすいため、AUCと合わせて確認することを推奨します。',
     },
     auc: {
         label: 'AUC',
-        gradient: 'from-purple-600 to-violet-500',
         description: 'ROC曲線下面積（Area Under the Curve）。分類モデルが正例と負例をどれだけ区別できるかを示します。1.0が完全な識別、0.5がランダムと同等です。クラス不均衡に強く、閾値非依存な評価指標として広く使われます。',
     },
 };
 
-// 指標のグラデーション背景クラスを取得する（未登録はデフォルト値を返す）
-function getMetricGradient(key: string): string {
-    return METRIC_DETAILS[key.toLowerCase()]?.gradient ?? 'from-gray-500 to-gray-400';
-}
-
-// 指標の詳細説明テキストを取得する
 function getMetricDetailDescription(key: string): string {
     return METRIC_DETAILS[key.toLowerCase()]?.description ?? '評価指標';
 }
 
-// ── 特徴量重要度グラフのグラデーション色計算（インディゴ→エメラルド）────────
-function getFeatureImportanceColor(index: number, total: number): string {
-    // 上位3件はインディゴ系、残りはエメラルド系
-    if (index < 3) {
-        const shades = ['hsl(243,75%,55%)', 'hsl(243,70%,63%)', 'hsl(243,65%,70%)'];
-        return shades[index];
-    }
-    const ratio = total <= 4 ? 0 : (index - 3) / (total - 4);
-    // インディゴ薄め → エメラルド系へのグラデーション
-    const r = Math.round(99  + (52  - 99)  * ratio);
-    const g = Math.round(102 + (168 - 102) * ratio);
-    const b = Math.round(241 + (83  - 241) * ratio);
-    return `rgb(${r},${g},${b})`;
+function getMetricLabel(key: string): string {
+    return METRIC_DETAILS[key.toLowerCase()]?.label ?? key.toUpperCase();
+}
+
+// ── 特徴量重要度バーの色（1位: amber、残り: zinc） ─────────────
+function getFeatureImportanceColor(index: number): string {
+    if (index === 0) return '#d97706'; // amber-600（最重要特徴量）
+    return '#52525b';                  // zinc-600（それ以外）
 }
 
 // ── 学習結果のメトリクスを1行の文字列にまとめる（JobStatusCard用）────────
@@ -208,7 +191,7 @@ function buildMetricsLabel(res: any): string | null {
     if (res.metrics.rmse != null)     parts.push(`RMSE = ${res.metrics.rmse.toFixed(2)}`);
     if (res.metrics.accuracy != null) parts.push(`Accuracy = ${(res.metrics.accuracy * 100).toFixed(1)}%`);
     if (res.metrics.auc != null)      parts.push(`AUC = ${res.metrics.auc.toFixed(3)}`);
-    return parts.length > 0 ? parts.join("  |  ") : null;
+    return parts.length > 0 ? parts.join('  |  ') : null;
 }
 
 // ── 学習ジョブの型定義 ────────────────────────────────────────
@@ -280,7 +263,6 @@ export default function DashboardPage() {
     const fetchPastJobs = async (cid: string) => {
         setLoadingPastJobs(true);
         try {
-            // config ごとのジョブ一覧を取得するエンドポイント
             const res = await apiClient.get(`/api/projects/${projectId}/train/jobs`, {
                 params: { config_id: cid },
             });
@@ -290,7 +272,6 @@ export default function DashboardPage() {
                 .sort((a, b) => (b.id ?? 0) - (a.id ?? 0));
             setPastJobs(completed);
         } catch {
-            // エンドポイントが未実装またはエラーの場合は空リストとして扱う
             setPastJobs([]);
         } finally {
             setLoadingPastJobs(false);
@@ -310,7 +291,7 @@ export default function DashboardPage() {
         try {
             const response = await apiClient.post(`/api/projects/${projectId}/train/run/${configId}`);
             setJob(response.data);
-            setResult(null); // 結果をリセット
+            setResult(null);
             startPolling(response.data.id);
         } catch (error: any) {
             console.error("Start training failed", error);
@@ -325,7 +306,6 @@ export default function DashboardPage() {
         setCancelling(true);
         try {
             await apiClient.post(`/api/projects/${projectId}/train/cancel/${job.id}`);
-            // キャンセル成功後はポーリングを停止してUIをリセット
             if (pollingRef.current) clearInterval(pollingRef.current);
             setJob(null);
             setPollingError(null);
@@ -349,15 +329,13 @@ export default function DashboardPage() {
                 if (res.data.status === "completed") {
                     clearInterval(pollingRef.current!);
                     fetchResult(jobId);
-                    // 完了後に過去ジョブ一覧を更新する
                     fetchPastJobs(configId);
-                    // 学習完了通知を送る
-                    addNotification('train', '学習が完了しました');
+                    // 通知処理のエラーがポーリング全体を止めないよう分離する
+                    try { addNotification('train', '学習が完了しました') } catch { /* ignore */ }
                 } else if (res.data.status === "failed") {
                     clearInterval(pollingRef.current!);
                 }
             } catch (err: any) {
-                // ポーリングエラーはコンソールに加えて状態変数にも設定してUIに表示する
                 console.error("Polling error", err);
                 const msg = err?.response?.data?.detail || err?.message || "ステータス確認中にエラーが発生しました";
                 setPollingError(msg);
@@ -388,7 +366,6 @@ export default function DashboardPage() {
     // 過去ジョブを選択して結果を表示する
     const handleSelectPastJob = (jobId: number) => {
         setSelectedJobId(jobId);
-        // 実行中の学習があればポーリングを停止せずに結果だけ切り替える
         fetchResult(jobId);
     };
 
@@ -411,6 +388,13 @@ export default function DashboardPage() {
         return Math.max(count * 28, 300);
     }, [result?.feature_importance]);
 
+    // SHAP チャートの高さをデータ件数に応じて動的に計算する（件数×28px、最小300px）
+    const shapChartHeight = useMemo(() => {
+        if (!result?.shap_importance) return 300;
+        const count = Math.min(result.shap_importance.length, 20);
+        return Math.max(count * 28, 300);
+    }, [result?.shap_importance]);
+
     // 学習実行ボタンが無効化される理由（null の場合は有効）
     const trainDisabledReason = !configId
         ? "分析設定を選択してください"
@@ -420,8 +404,12 @@ export default function DashboardPage() {
 
     return (
         <div className="space-y-8 animate-fade-in">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">分析ダッシュボード</h1>
+            {/* ── ページヘッダー ─────────────────────────────────────── */}
+            <div className="flex justify-between items-center pb-4 border-b border-zinc-200">
+                <div>
+                    <h1 className="text-xl font-semibold text-zinc-900">分析ダッシュボード</h1>
+                    <p className="text-sm text-zinc-500 mt-0.5">モデルの学習・評価・結果確認</p>
+                </div>
                 <div className="flex gap-2">
                     {/* 分析設定選択 */}
                     <Select value={configId} onValueChange={setConfigId} disabled={configs.length === 0}>
@@ -442,7 +430,9 @@ export default function DashboardPage() {
                         <TooltipTrigger asChild>
                             <span className={trainDisabledReason ? "cursor-not-allowed inline-flex" : "inline-flex"}>
                                 <Button onClick={startTraining} disabled={!!trainDisabledReason} className="bg-primary hover:opacity-90 text-primary-foreground">
-                                    {job !== null && (job.status === "running" || job.status === "pending") ? <CircleNotch className="w-4 h-4 mr-2 animate-spin" weight="bold" /> : <Play className="w-4 h-4 mr-2" weight="fill" />}
+                                    {job !== null && (job.status === "running" || job.status === "pending")
+                                        ? <CircleNotch className="w-4 h-4 mr-2 animate-spin" weight="bold" />
+                                        : <Play className="w-4 h-4 mr-2" weight="fill" />}
                                     学習実行
                                 </Button>
                             </span>
@@ -451,7 +441,6 @@ export default function DashboardPage() {
                             <TooltipContent>{trainDisabledReason}</TooltipContent>
                         )}
                     </Tooltip>
-
                 </div>
             </div>
 
@@ -473,68 +462,55 @@ export default function DashboardPage() {
                 </Alert>
             )}
 
-            {/* ── 過去の学習結果セクション ─────────────────────────────── */}
+            {/* ── 過去の学習結果 ─────────────────────────────────────── */}
             {configId && (
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <ClockCounterClockwise className="w-4 h-4 text-muted-foreground" />
-                            過去の学習結果
-                        </CardTitle>
-                        <CardDescription>
-                            選択中の設定で完了した学習ジョブ一覧。クリックして結果を切り替えられます。
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {loadingPastJobs ? (
-                            // ジョブ一覧読み込み中のスピナー
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                                <CircleNotch className="w-4 h-4 animate-spin" weight="bold" />
-                                読み込み中...
-                            </div>
-                        ) : pastJobs.length === 0 ? (
-                            // 完了済みジョブが存在しない場合のメッセージ
-                            <p className="text-sm text-muted-foreground py-2">
-                                この設定の完了済み学習ジョブはまだありません。「学習実行」ボタンで学習を開始してください。
-                            </p>
-                        ) : (
-                            <div className="flex flex-wrap gap-2">
-                                {pastJobs.map((j) => {
-                                    // 選択中かどうかを判定（selectedJobId がない場合は最新ジョブを選択中扱い）
-                                    const isSelected =
-                                        selectedJobId != null
-                                            ? j.id === selectedJobId
-                                            : j.id === pastJobs[0]?.id && result != null;
-                                    return (
-                                        <button
-                                            key={j.id}
-                                            onClick={() => handleSelectPastJob(j.id)}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-colors
-                                                ${isSelected
-                                                    ? 'bg-primary text-primary-foreground border-primary font-semibold'
-                                                    : 'bg-white border-border text-foreground hover:bg-secondary/60'
-                                                }`}
-                                        >
-                                            <CaretRight className="w-3.5 h-3.5" weight="bold" />
-                                            Job #{j.id}
-                                            {j.created_at && (
-                                                <span className={`text-xs ${isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                                                    {new Date(j.created_at).toLocaleString('ja-JP', {
-                                                        month: '2-digit', day: '2-digit',
-                                                        hour: '2-digit', minute: '2-digit',
-                                                    })}
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                <section className="py-5 border-b border-zinc-100">
+                    <h2 className="text-sm font-medium text-zinc-700 mb-3">過去の学習結果</h2>
+                    {loadingPastJobs ? (
+                        <div className="flex items-center gap-2 text-sm text-zinc-400 py-1">
+                            <CircleNotch className="w-4 h-4 animate-spin" weight="bold" />
+                            読み込み中...
+                        </div>
+                    ) : pastJobs.length === 0 ? (
+                        <p className="text-sm text-zinc-400 py-1">
+                            この設定の完了済み学習ジョブはまだありません。「学習実行」ボタンで学習を開始してください。
+                        </p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {pastJobs.map((j) => {
+                                const isSelected =
+                                    selectedJobId != null
+                                        ? j.id === selectedJobId
+                                        : j.id === pastJobs[0]?.id && result != null;
+                                return (
+                                    <button
+                                        key={j.id}
+                                        onClick={() => handleSelectPastJob(j.id)}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded border text-sm transition-colors
+                                            ${isSelected
+                                                ? 'border-amber-500 bg-amber-50 text-amber-900 font-medium'
+                                                : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400'
+                                            }`}
+                                    >
+                                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isSelected ? 'bg-amber-500' : 'bg-zinc-300'}`} />
+                                        Job #{j.id}
+                                        {j.created_at && (
+                                            <span className={`text-xs ${isSelected ? 'text-amber-700' : 'text-zinc-400'}`}>
+                                                {new Date(j.created_at).toLocaleString('ja-JP', {
+                                                    month: '2-digit', day: '2-digit',
+                                                    hour: '2-digit', minute: '2-digit',
+                                                })}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </section>
             )}
 
-            {/* Status Card */}
+            {/* ジョブステータス */}
             {job && (
                 <JobStatusCard
                     status={job.status as JobStatus}
@@ -547,499 +523,500 @@ export default function DashboardPage() {
                 />
             )}
 
-            {/* Result Section */}
+            {/* ── 学習結果 ──────────────────────────────────────────── */}
             {result && (
-                <div ref={resultRef} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div ref={resultRef} className="space-y-10">
 
-                    {/* AI Analysis Insight */}
+                    {/* AI アナリティクス・インサイト */}
                     {result.ai_analysis_text && (
-                        <div className="col-span-1 md:col-span-2">
-                            <Card className="border-primary/20 bg-primary/5">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-primary">
-                                        <Sparkle className="w-5 h-5 text-yellow-500" weight="fill" /> AI アナリティクス・インサイト
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
-                                        <ReactMarkdown>{stripTablePrefix(result.ai_analysis_text)}</ReactMarkdown>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
+                        <section className="border-l-4 border-amber-400 pl-5 py-1">
+                            <div className="flex items-center gap-1.5 mb-3">
+                                <Sparkle className="w-4 h-4 text-amber-500" weight="fill" />
+                                <h2 className="text-sm font-medium text-zinc-700">AI アナリティクス・インサイト</h2>
+                            </div>
+                            <div className="prose prose-sm max-w-none text-zinc-600 leading-relaxed">
+                                <ReactMarkdown>{stripTablePrefix(result.ai_analysis_text)}</ReactMarkdown>
+                            </div>
+                        </section>
                     )}
 
-                    {/* ── 評価指標カード（グラデーション背景） ──────────────── */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <TrendUp className="w-5 h-5" /> 評価指標
-                            </CardTitle>
+                    {/* ── 評価指標 ──────────────────────────────────── */}
+                    <section className="py-5 border-b border-zinc-100">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-sm font-medium text-zinc-700">評価指標</h2>
                             {result.model_type && (
-                                <div className="flex items-center gap-1.5 pt-0.5">
-                                    <span className="text-xs text-muted-foreground">使用モデル:</span>
-                                    <Badge variant="outline" className="text-xs h-5 bg-white">
-                                        {{
-                                            gradient_boosting: '勾配ブースティング (LightGBM)',
-                                            logistic_regression: 'ロジスティック回帰 / 線形回帰',
-                                        }[result.model_type as string] ?? result.model_type}
-                                    </Badge>
-                                </div>
+                                <span className="text-xs text-zinc-400 border border-zinc-200 rounded px-2 py-0.5 bg-white">
+                                    {{
+                                        gradient_boosting: '勾配ブースティング (LightGBM)',
+                                        logistic_regression: 'ロジスティック回帰 / 線形回帰',
+                                    }[result.model_type as string] ?? result.model_type}
+                                </span>
                             )}
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-2 gap-4">
-                                {Object.entries(result.metrics).map(([key, value]: [string, any]) => {
-                                    const gradient = getMetricGradient(key);
-                                    const detail = getMetricDetailDescription(key);
-                                    return (
-                                        <Tooltip key={key}>
-                                            <TooltipTrigger asChild>
-                                                {/* グラデーション背景カード */}
-                                                <div className={`bg-gradient-to-br ${gradient} p-4 rounded-xl text-center cursor-help transition-opacity hover:opacity-90 shadow-sm`}>
-                                                    <div className="text-xs text-white/80 uppercase font-semibold flex items-center justify-center gap-1 mb-1">
-                                                        {key} <Question className="w-3 h-3" />
-                                                    </div>
-                                                    {/* 数値を大きく強調 */}
-                                                    <div className="text-3xl font-bold text-white drop-shadow">
-                                                        {typeof value === 'number' ? value.toFixed(4) : value}
-                                                    </div>
+                        </div>
+                        {/* インラインメトリクス — グラデーション背景カードを廃止 */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-zinc-200 rounded-lg overflow-hidden border border-zinc-200">
+                            {Object.entries(result.metrics).map(([key, value]: [string, any]) => {
+                                const detail = getMetricDetailDescription(key);
+                                const label = getMetricLabel(key);
+                                return (
+                                    <Tooltip key={key}>
+                                        <TooltipTrigger asChild>
+                                            <div className="bg-white px-5 py-4 cursor-help">
+                                                <div className="flex items-center gap-1 mb-2">
+                                                    <span className="text-xs text-zinc-500 font-medium">{label}</span>
+                                                    <Question className="w-3 h-3 text-zinc-400" />
                                                 </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="max-w-xs text-xs leading-relaxed">
-                                                <p>{detail}</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    );
-                                })}
-                            </div>
-                        </CardContent>
-                    </Card>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-2xl font-semibold tabular-nums text-zinc-900">
+                                                        {typeof value === 'number' ? value.toFixed(4) : value}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                                            <p>{detail}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                );
+                            })}
+                        </div>
+                    </section>
 
-                    {/* ── 特徴量重要度グラフ（上位20件・グラデーション・動的高さ） ─ */}
-                    <Card className="col-span-1 md:col-span-2 lg:col-span-1">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <ChartBar className="w-5 h-5" /> 重要特徴量
-                            </CardTitle>
-                            <CardDescription>モデルの予測に寄与した上位20件の特徴量</CardDescription>
-                        </CardHeader>
-                        {/* グラフ高さはデータ件数×28px（最小300px）で動的に変わる */}
-                        <CardContent style={{ height: featureImportanceChartHeight + 40 }}>
-                            <ResponsiveContainer width="100%" height={featureImportanceChartHeight}>
-                                <BarChart
-                                    data={result.feature_importance.slice(0, 20).map((item: any) => ({
-                                        ...item,
-                                        feature: stripTablePrefix(item.feature)
-                                    }))}
-                                    layout="vertical"
-                                    margin={{ top: 5, right: 80, left: 40, bottom: 5 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                                    <XAxis type="number" />
-                                    <YAxis type="category" dataKey="feature" width={150} tick={{ fontSize: 11 }} />
-                                    {/* バーホバー時のツールチップ */}
-                                    <RechartsTooltip
-                                        formatter={(value: any) => [
-                                            typeof value === 'number' ? value.toFixed(4) : value,
-                                            '重要度'
-                                        ]}
-                                        contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}
-                                    />
-                                    <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
-                                        {/* 青→水色のグラデーション色をインデックスに応じて設定 */}
-                                        {result.feature_importance.slice(0, 20).map((_entry: any, index: number) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={getFeatureImportanceColor(index, Math.min(result.feature_importance.length, 20))}
-                                            />
-                                        ))}
-                                        {/* バーの右端に重要度の数値を表示 */}
-                                        <LabelList
-                                            dataKey="importance"
-                                            position="right"
-                                            formatter={(v: unknown) => typeof v === 'number' ? v.toFixed(3) : String(v)}
-                                            style={{ fontSize: 10, fill: '#64748b' }}
+                    {/* ── 特徴量重要度 ──────────────────────────────── */}
+                    {result.feature_importance && result.feature_importance.length > 0 && (
+                        <section className="py-5 border-b border-zinc-100">
+                            <div className="mb-4">
+                                <h2 className="text-sm font-medium text-zinc-700">重要特徴量（Feature Importance）</h2>
+                                <p className="text-xs text-zinc-400 mt-0.5">分岐回数ベースのモデル内部重要度。上位20件。{' '}
+                                    <span className="inline-block w-2 h-2 rounded-sm bg-amber-600 align-middle" /> 最重要特徴量</p>
+                            </div>
+                            <div style={{ height: featureImportanceChartHeight + 40 }}>
+                                <ResponsiveContainer width="100%" height={featureImportanceChartHeight}>
+                                    <BarChart
+                                        data={result.feature_importance.slice(0, 20).map((item: any) => ({
+                                            ...item,
+                                            feature: stripTablePrefix(item.feature)
+                                        }))}
+                                        layout="vertical"
+                                        margin={{ top: 5, right: 80, left: 40, bottom: 5 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e4e4e7" />
+                                        <XAxis type="number" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} />
+                                        <YAxis type="category" dataKey="feature" width={150} tick={{ fontSize: 11, fill: '#52525b' }} axisLine={false} tickLine={false} />
+                                        <RechartsTooltip
+                                            formatter={(value: any) => [
+                                                typeof value === 'number' ? value.toFixed(4) : value,
+                                                '重要度'
+                                            ]}
+                                            contentStyle={{ backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e4e4e7', fontSize: 12 }}
                                         />
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </CardContent>
-                    </Card>
+                                        <Bar dataKey="importance" radius={[0, 3, 3, 0]}>
+                                            {result.feature_importance.slice(0, 20).map((_entry: any, index: number) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={getFeatureImportanceColor(index)}
+                                                />
+                                            ))}
+                                            <LabelList
+                                                dataKey="importance"
+                                                position="right"
+                                                formatter={(v: unknown) => typeof v === 'number' ? v.toFixed(3) : String(v)}
+                                                style={{ fontSize: 10, fill: '#71717a' }}
+                                            />
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </section>
+                    )}
+
+                    {/* ── 重要特徴量（SHAP）── LightGBMのみ表示 ─────────── */}
+                    {result.shap_importance && result.shap_importance.length > 0 && (
+                        <section className="py-5 border-b border-zinc-100">
+                            <div className="mb-4">
+                                <h2 className="text-sm font-medium text-zinc-700">重要特徴量（SHAP）</h2>
+                                <p className="text-xs text-zinc-400 mt-0.5">
+                                    各特徴量が予測値に与えた平均的な影響量（LightGBMのみ）。{' '}
+                                    <span className="inline-block w-2 h-2 rounded-sm align-middle" style={{ backgroundColor: 'hsl(0, 84%, 60%)' }} />{' '}
+                                    正（予測値を押し上げ）{' '}
+                                    <span className="inline-block w-2 h-2 rounded-sm align-middle ml-2" style={{ backgroundColor: 'hsl(155, 40%, 30%)' }} />{' '}
+                                    負（予測値を押し下げ）
+                                </p>
+                            </div>
+                            <div style={{ height: shapChartHeight + 40 }}>
+                                <ResponsiveContainer width="100%" height={shapChartHeight}>
+                                    <BarChart
+                                        data={result.shap_importance.slice(0, 20).map((item: any) => ({
+                                            ...item,
+                                            feature: stripTablePrefix(item.feature),
+                                        }))}
+                                        layout="vertical"
+                                        margin={{ top: 5, right: 80, left: 40, bottom: 5 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e4e4e7" />
+                                        <XAxis type="number" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                                        <YAxis type="category" dataKey="feature" width={150} tick={{ fontSize: 11, fill: '#52525b' }} axisLine={false} tickLine={false} />
+                                        <RechartsTooltip
+                                            formatter={(value: any) => [
+                                                typeof value === 'number' ? value.toFixed(4) : value,
+                                                'SHAP値',
+                                            ]}
+                                            contentStyle={{ backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e4e4e7', fontSize: 12 }}
+                                        />
+                                        <Bar dataKey="shap_value" radius={[0, 3, 3, 0]}>
+                                            {result.shap_importance.slice(0, 20).map((entry: any, index: number) => (
+                                                <Cell
+                                                    key={`shap-cell-${index}`}
+                                                    fill={entry.shap_value >= 0 ? 'hsl(0, 84%, 60%)' : 'hsl(155, 40%, 30%)'}
+                                                />
+                                            ))}
+                                            <LabelList
+                                                dataKey="shap_value"
+                                                position="right"
+                                                formatter={(v: unknown) => typeof v === 'number' ? v.toFixed(3) : String(v)}
+                                                style={{ fontSize: 10, fill: '#71717a' }}
+                                            />
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </section>
+                    )}
 
                     {/* 係数統計 — 線形モデルで coef_stats が未計算の場合の注意表示 */}
                     {result.model_type === 'logistic_regression' && (!result.coef_stats || result.coef_stats.length === 0) && (
-                        <Card className="col-span-1 md:col-span-2" style={{ borderColor: 'var(--warning)', background: 'var(--warning-muted)' }}>
-                            <CardContent className="pt-4 pb-3">
-                                <p className="text-sm" style={{ color: 'var(--warning-foreground)' }}>
-                                    <span className="font-semibold">係数統計（p値・信頼区間）</span>はまだ計算されていません。<br />
-                                    「学習実行」ボタンで再実行すると、この欄に統計量が表示されます。
-                                </p>
-                            </CardContent>
-                        </Card>
+                        <div className="border-l-4 border-amber-400 pl-4 py-2 bg-amber-50 rounded-r-lg">
+                            <p className="text-sm text-amber-900">
+                                <span className="font-semibold">係数統計（p値・信頼区間）</span>はまだ計算されていません。<br />
+                                「学習実行」ボタンで再実行すると、この欄に統計量が表示されます。
+                            </p>
+                        </div>
                     )}
 
                     {/* 係数統計 (線形モデルのみ) */}
                     {result.model_type === 'logistic_regression' && result.coef_stats && result.coef_stats.length > 0 && (
-                        <Card className="col-span-1 md:col-span-2">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Table className="w-5 h-5" /> 係数統計
-                                </CardTitle>
-                                <CardDescription>
+                        <section className="py-5 border-b border-zinc-100">
+                            <div className="mb-4">
+                                <h2 className="text-sm font-medium text-zinc-700">係数統計</h2>
+                                <p className="text-xs text-zinc-400 mt-0.5">
                                     {result.coef_stats[0]?.odds_ratio != null
                                         ? '各特徴量のオッズ比・p値・95%信頼区間（ロジスティック回帰）。係数はStandardScalerで標準化済みのため、ORは「値が1SD増えたときの効果」を表します。'
                                         : '各特徴量の標準化偏回帰係数・p値・95%信頼区間（線形回帰）。係数はStandardScalerで標準化済み（1SD変化あたりの効果）。'}
-                                    <span className="ml-2 text-xs text-muted-foreground">*** p&lt;0.001　** p&lt;0.01　* p&lt;0.05　n.s. 非有意</span>
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm border-collapse">
-                                        <thead>
-                                            <tr className="border-b bg-secondary/30 text-left">
-                                                <th className="px-3 py-2 font-medium text-muted-foreground">特徴量</th>
-                                                {result.coef_stats[0]?.odds_ratio != null ? (
-                                                    <>
-                                                        <th className="px-3 py-2 font-medium text-muted-foreground text-right">オッズ比 (OR)</th>
-                                                        <th className="px-3 py-2 font-medium text-muted-foreground text-right">95%信頼区間</th>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <th className="px-3 py-2 font-medium text-muted-foreground text-right">標準化偏回帰係数 (β)</th>
-                                                        <th className="px-3 py-2 font-medium text-muted-foreground text-right">95%信頼区間</th>
-                                                    </>
-                                                )}
-                                                <th className="px-3 py-2 font-medium text-muted-foreground text-right">p値</th>
-                                                <th className="px-3 py-2 font-medium text-muted-foreground text-center">有意性</th>
-                                                <th className="px-3 py-2 font-medium text-muted-foreground text-center">方向</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {result.coef_stats.slice(0, 20).map((row: any, idx: number) => {
-                                                const sig = pValueLabel(row.p_value);
-                                                const isOdds = row.odds_ratio != null;
-                                                const mainVal = isOdds ? row.odds_ratio : row.coef;
-                                                const isSignificant = row.p_value < 0.05;
-                                                // 値ラベルマップ（フル名→短縮名の順でフォールバック）
-                                                const labels = colLabelsMap[row.feature] ?? colLabelsMap[stripTablePrefix(row.feature)]
-                                                // 係数の正負から方向バッジを決定する（OR: 1との比較, 線形: 0との比較）
-                                                const isUp = isOdds ? mainVal > 1.0 : row.coef > 0
-                                                const dirLabel = isOdds
-                                                    ? (isUp ? '値↑→リスク↑' : '値↑→リスク↓')
-                                                    : (isUp ? '値↑→予測↑' : '値↑→予測↓')
-                                                const dirColor = isUp
-                                                    ? 'text-destructive bg-destructive/10'
-                                                    : 'text-primary bg-primary/10'
-                                                return (
-                                                    <tr key={idx} className={`border-b transition-colors hover:bg-secondary/10 ${isSignificant ? '' : 'opacity-60'}`}>
-                                                        <td className="px-3 py-2 max-w-[220px]">
-                                                            {/* 変数名 */}
-                                                            <div className="font-mono text-xs truncate" title={stripTablePrefix(row.feature)}>
-                                                                {stripTablePrefix(row.feature)}
+                                    <span className="ml-2">*** p&lt;0.001　** p&lt;0.01　* p&lt;0.05　n.s. 非有意</span>
+                                </p>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-zinc-200 text-left">
+                                            <th className="px-3 py-2 text-xs font-medium text-zinc-500">特徴量</th>
+                                            {result.coef_stats[0]?.odds_ratio != null ? (
+                                                <>
+                                                    <th className="px-3 py-2 text-xs font-medium text-zinc-500 text-right">オッズ比 (OR)</th>
+                                                    <th className="px-3 py-2 text-xs font-medium text-zinc-500 text-right">95%信頼区間</th>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <th className="px-3 py-2 text-xs font-medium text-zinc-500 text-right">標準化偏回帰係数 (β)</th>
+                                                    <th className="px-3 py-2 text-xs font-medium text-zinc-500 text-right">95%信頼区間</th>
+                                                </>
+                                            )}
+                                            <th className="px-3 py-2 text-xs font-medium text-zinc-500 text-right">p値</th>
+                                            <th className="px-3 py-2 text-xs font-medium text-zinc-500 text-center">有意性</th>
+                                            <th className="px-3 py-2 text-xs font-medium text-zinc-500 text-center">方向</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {result.coef_stats.slice(0, 20).map((row: any, idx: number) => {
+                                            const sig = pValueLabel(row.p_value);
+                                            const isOdds = row.odds_ratio != null;
+                                            const mainVal = isOdds ? row.odds_ratio : row.coef;
+                                            const isSignificant = row.p_value < 0.05;
+                                            const labels = colLabelsMap[row.feature] ?? colLabelsMap[stripTablePrefix(row.feature)]
+                                            const isUp = isOdds ? mainVal > 1.0 : row.coef > 0
+                                            const dirLabel = isOdds
+                                                ? (isUp ? '値↑→リスク↑' : '値↑→リスク↓')
+                                                : (isUp ? '値↑→予測↑' : '値↑→予測↓')
+                                            const dirColor = isUp
+                                                ? 'text-destructive bg-destructive/10'
+                                                : 'text-primary bg-primary/10'
+                                            return (
+                                                <tr key={idx} className={`border-b border-zinc-100 transition-colors hover:bg-zinc-50 ${isSignificant ? '' : 'opacity-60'}`}>
+                                                    <td className="px-3 py-2 max-w-[220px]">
+                                                        <div className="font-mono text-xs truncate" title={stripTablePrefix(row.feature)}>
+                                                            {stripTablePrefix(row.feature)}
+                                                        </div>
+                                                        {labels && (
+                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                {Object.entries(labels).map(([val, lbl]) => (
+                                                                    <span key={val} className="text-[10px] text-zinc-400 bg-zinc-100 px-1 py-0.5 rounded leading-none">
+                                                                        {val}:{lbl as string}
+                                                                    </span>
+                                                                ))}
                                                             </div>
-                                                            {/* 値ラベル凡例（設定されている列のみ表示） */}
-                                                            {labels && (
-                                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                                    {Object.entries(labels).map(([val, lbl]) => (
-                                                                        <span key={val} className="text-[10px] text-muted-foreground bg-secondary px-1 py-0.5 rounded leading-none">
-                                                                            {val}:{lbl as string}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                        <td className={`px-3 py-2 text-right font-semibold tabular-nums ${mainVal > 1 || mainVal >= 0 ? 'text-destructive' : 'text-primary'}`}>
-                                                            {mainVal.toFixed(3)}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-right text-xs text-muted-foreground tabular-nums">
-                                                            [{row.ci_lower.toFixed(3)}, {row.ci_upper.toFixed(3)}]
-                                                        </td>
-                                                        <td className="px-3 py-2 text-right tabular-nums text-xs">
-                                                            {row.p_value < 0.001 ? '< 0.001' : row.p_value.toFixed(3)}
-                                                        </td>
-                                                        <td className={`px-3 py-2 text-center font-bold text-sm ${sig.color}`}>
-                                                            {sig.mark}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-center">
-                                                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${dirColor}`}>
-                                                                {dirLabel}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                                        )}
+                                                    </td>
+                                                    <td className={`px-3 py-2 text-right font-semibold tabular-nums ${mainVal > 1 || mainVal >= 0 ? 'text-destructive' : 'text-primary'}`}>
+                                                        {mainVal.toFixed(3)}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right text-xs text-zinc-400 tabular-nums">
+                                                        [{row.ci_lower.toFixed(3)}, {row.ci_upper.toFixed(3)}]
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right tabular-nums text-xs text-zinc-600">
+                                                        {row.p_value < 0.001 ? '< 0.001' : row.p_value.toFixed(3)}
+                                                    </td>
+                                                    <td className={`px-3 py-2 text-center font-bold text-sm ${sig.color}`}>
+                                                        {sig.mark}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-center">
+                                                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${dirColor}`}>
+                                                            {dirLabel}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
                     )}
 
                     {/* 数式の出力 — 線形/ロジスティック回帰のcoef_statsがある場合のみ表示 */}
                     {result.model_type === 'logistic_regression' && result.coef_stats && result.coef_stats.length > 0 && (
-                        <Card className="col-span-1 md:col-span-2">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <ListBullets className="w-5 h-5" /> 数式
-                                </CardTitle>
-                                <CardDescription>
+                        <section className="py-5 border-b border-zinc-100">
+                            <div className="mb-4">
+                                <h2 className="text-sm font-medium text-zinc-700">数式</h2>
+                                <p className="text-xs text-zinc-400 mt-0.5">
                                     {result.coef_stats[0]?.odds_ratio != null
                                         ? 'ロジスティック回帰の対数オッズ式（log-odds = Σ coef * x + const）'
                                         : '線形回帰の予測式（y = Σ coef * x + const）'}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {(() => {
-                                    // intercept（定数項）を探す
-                                    const intercept = result.coef_stats.find((r: any) =>
-                                        r.feature === 'const' || r.feature === 'Intercept' || r.feature === 'intercept'
-                                    )
-                                    // 説明変数のみ抽出する
-                                    const features = result.coef_stats.filter((r: any) =>
-                                        r.feature !== 'const' && r.feature !== 'Intercept' && r.feature !== 'intercept'
-                                    )
-                                    const isOdds = result.coef_stats[0]?.odds_ratio != null
-                                    // 数式文字列を組み立てる
-                                    const terms = features
-                                        .filter((r: any) => r.coef != null)
-                                        .map((r: any) => {
-                                            const coef = (r.coef as number).toFixed(4)
-                                            const fname = stripTablePrefix(r.feature)
-                                            return `  ${Number(coef) >= 0 ? '+' : ''}${coef} × ${fname}`
-                                        })
-                                    const interceptTerm = intercept?.coef != null
-                                        ? `  ${Number(intercept.coef.toFixed(4)) >= 0 ? '+' : ''}${intercept.coef.toFixed(4)}`
-                                        : ''
-                                    const lhs = isOdds ? 'log-odds' : 'y'
-                                    const formula = `${lhs} =\n${terms.join('\n')}${interceptTerm}`
-                                    return (
-                                        <div className="relative">
-                                            <pre className="text-xs font-mono bg-muted rounded-lg p-4 overflow-x-auto whitespace-pre leading-relaxed text-foreground max-h-64 overflow-y-auto">
-                                                {formula}
-                                            </pre>
-                                            <button
-                                                className="absolute top-2 right-2 text-[10px] px-2 py-0.5 bg-background border border-border rounded text-muted-foreground hover:text-foreground transition-colors"
-                                                onClick={() => navigator.clipboard.writeText(formula)}
-                                            >
-                                                コピー
-                                            </button>
-                                        </div>
-                                    )
-                                })()}
-                            </CardContent>
-                        </Card>
+                                </p>
+                            </div>
+                            {(() => {
+                                const intercept = result.coef_stats.find((r: any) =>
+                                    r.feature === 'const' || r.feature === 'Intercept' || r.feature === 'intercept'
+                                )
+                                const features = result.coef_stats.filter((r: any) =>
+                                    r.feature !== 'const' && r.feature !== 'Intercept' && r.feature !== 'intercept'
+                                )
+                                const isOdds = result.coef_stats[0]?.odds_ratio != null
+                                const terms = features
+                                    .filter((r: any) => r.coef != null)
+                                    .map((r: any) => {
+                                        const coef = (r.coef as number).toFixed(4)
+                                        const fname = stripTablePrefix(r.feature)
+                                        return `  ${Number(coef) >= 0 ? '+' : ''}${coef} × ${fname}`
+                                    })
+                                const interceptTerm = intercept?.coef != null
+                                    ? `  ${Number(intercept.coef.toFixed(4)) >= 0 ? '+' : ''}${intercept.coef.toFixed(4)}`
+                                    : ''
+                                const lhs = isOdds ? 'log-odds' : 'y'
+                                const formula = `${lhs} =\n${terms.join('\n')}${interceptTerm}`
+                                return (
+                                    <div className="relative">
+                                        <pre className="text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-lg p-4 overflow-x-auto whitespace-pre leading-relaxed text-zinc-800 max-h-64 overflow-y-auto">
+                                            {formula}
+                                        </pre>
+                                        <button
+                                            className="absolute top-2 right-2 text-[10px] px-2 py-0.5 bg-white border border-zinc-200 rounded text-zinc-500 hover:text-zinc-800 transition-colors"
+                                            onClick={() => navigator.clipboard.writeText(formula)}
+                                        >
+                                            コピー
+                                        </button>
+                                    </div>
+                                )
+                            })()}
+                        </section>
                     )}
 
                     {/* 値のシミュレーション — 線形/ロジスティック回帰のcoef_statsがある場合のみ表示 */}
                     {result.model_type === 'logistic_regression' && result.coef_stats && result.coef_stats.length > 0 && (
-                        <Card className="col-span-1 md:col-span-2">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Sparkle className="w-5 h-5" /> 値のシミュレーション
-                                </CardTitle>
-                                <CardDescription>
-                                    特徴量の値を変えて予測値をシミュレーションします（係数×入力値の合計）
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {(() => {
-                                    // 説明変数のみ（intercept を除く）
-                                    const features = result.coef_stats.filter((r: any) =>
-                                        r.feature !== 'const' && r.feature !== 'Intercept' && r.feature !== 'intercept'
-                                    )
-                                    const intercept = result.coef_stats.find((r: any) =>
-                                        r.feature === 'const' || r.feature === 'Intercept' || r.feature === 'intercept'
-                                    )
-                                    const isOdds = result.coef_stats[0]?.odds_ratio != null
+                        <section className="py-5 border-b border-zinc-100">
+                            <div className="mb-4">
+                                <h2 className="text-sm font-medium text-zinc-700">値のシミュレーション</h2>
+                                <p className="text-xs text-zinc-400 mt-0.5">特徴量の値を変えて予測値をシミュレーションします（係数×入力値の合計）</p>
+                            </div>
+                            {(() => {
+                                const features = result.coef_stats.filter((r: any) =>
+                                    r.feature !== 'const' && r.feature !== 'Intercept' && r.feature !== 'intercept'
+                                )
+                                const intercept = result.coef_stats.find((r: any) =>
+                                    r.feature === 'const' || r.feature === 'Intercept' || r.feature === 'intercept'
+                                )
+                                const isOdds = result.coef_stats[0]?.odds_ratio != null
 
-                                    // 予測値を計算する（線形: y = Σcoef*x + intercept, ロジスティック: sigmoid(Σcoef*x + intercept)）
-                                    const logOdds = features.reduce((sum: number, r: any) => {
-                                        // フル名で照合し、なければ短縮名でフォールバック（メインテーブル列は prefix なし）
-                                        const labels = colLabelsMap[r.feature] ?? colLabelsMap[stripTablePrefix(r.feature)]
-                                        // ラベルがある場合は最初のキーを数値デフォルトにして表示と計算を一致させる
-                                        const defaultVal = labels
-                                            ? (parseFloat(Object.keys(labels)[0] ?? '0') || 0)
-                                            : 0
-                                        const val = simValues[r.feature] ?? defaultVal
-                                        return sum + (r.coef ?? 0) * val
-                                    }, intercept?.coef ?? 0)
+                                const logOdds = features.reduce((sum: number, r: any) => {
+                                    const labels = colLabelsMap[r.feature] ?? colLabelsMap[stripTablePrefix(r.feature)]
+                                    const defaultVal = labels
+                                        ? (parseFloat(Object.keys(labels)[0] ?? '0') || 0)
+                                        : 0
+                                    const val = simValues[r.feature] ?? defaultVal
+                                    return sum + (r.coef ?? 0) * val
+                                }, intercept?.coef ?? 0)
 
-                                    const predicted = isOdds
-                                        ? (1 / (1 + Math.exp(-logOdds)))  // シグモイド関数で確率に変換
-                                        : logOdds
+                                const predicted = isOdds
+                                    ? (1 / (1 + Math.exp(-logOdds)))
+                                    : logOdds
 
-                                    return (
-                                        <div className="space-y-4">
-                                            {/* 予測値表示 */}
-                                            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 text-center">
-                                                <p className="text-xs text-muted-foreground mb-1">
-                                                    {isOdds ? '予測確率' : '予測値'}
-                                                </p>
-                                                <p className="text-3xl font-bold font-mono text-primary tabular-nums">
-                                                    {isOdds
-                                                        ? `${(predicted * 100).toFixed(2)}%`
-                                                        : predicted.toFixed(4)}
-                                                </p>
-                                            </div>
-
-                                            {/* 特徴量入力 */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
-                                                {features.slice(0, 20).map((r: any) => {
-                                                    const fname = stripTablePrefix(r.feature)
-                                                    const val = simValues[r.feature] ?? 0
-                                                    // フル名で照合し、なければ短縮名でフォールバック（メインテーブル列は prefix なし）
-                                                    const labels = colLabelsMap[r.feature] ?? colLabelsMap[stripTablePrefix(r.feature)]
-                                                    return (
-                                                        <div key={r.feature} className="flex items-center gap-2">
-                                                            <span className="text-xs font-mono text-muted-foreground truncate flex-1 min-w-0" title={fname}>
-                                                                {fname}
-                                                            </span>
-                                                            {labels ? (
-                                                                // カテゴリ値ラベルがある場合はドロップダウンを表示する（キーは数値文字列）
-                                                                <select
-                                                                    value={String(simValues[r.feature] ?? Object.keys(labels)[0] ?? '0')}
-                                                                    onChange={(e) => {
-                                                                        const num = parseFloat(e.target.value)
-                                                                        setSimValues(prev => ({
-                                                                            ...prev,
-                                                                            [r.feature]: isNaN(num) ? 0 : num,
-                                                                        }))
-                                                                    }}
-                                                                    className="w-32 h-7 text-xs border border-border rounded px-2 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                                                                >
-                                                                    {Object.entries(labels).map(([rawVal, label]) => (
-                                                                        <option key={rawVal} value={rawVal}>{label}</option>
-                                                                    ))}
-                                                                </select>
-                                                            ) : (
-                                                                // ラベルなしの場合は数値入力（既存のまま）
-                                                                <input
-                                                                    type="number"
-                                                                    step="any"
-                                                                    value={val}
-                                                                    onChange={(e) => {
-                                                                        const num = parseFloat(e.target.value)
-                                                                        setSimValues(prev => ({
-                                                                            ...prev,
-                                                                            [r.feature]: isNaN(num) ? 0 : num,
-                                                                        }))
-                                                                    }}
-                                                                    className="w-24 h-7 text-xs font-mono border border-border rounded px-2 text-right bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
-
-                                            {features.length > 20 && (
-                                                <p className="text-xs text-muted-foreground text-center">
-                                                    上位20件の特徴量のみ表示しています
-                                                </p>
-                                            )}
-
-                                            {/* リセットボタン */}
-                                            <button
-                                                className="text-xs text-muted-foreground hover:text-foreground underline"
-                                                onClick={() => setSimValues({})}
-                                            >
-                                                すべて0にリセット
-                                            </button>
+                                return (
+                                    <div className="space-y-4">
+                                        {/* 予測値表示 — テキスト中心で大きく */}
+                                        <div className="bg-zinc-50 border border-zinc-200 rounded-lg px-6 py-5 flex items-baseline gap-3">
+                                            <span className="text-xs text-zinc-500">
+                                                {isOdds ? '予測確率' : '予測値'}
+                                            </span>
+                                            <span className="text-3xl font-semibold font-mono text-zinc-900 tabular-nums">
+                                                {isOdds
+                                                    ? `${(predicted * 100).toFixed(2)}%`
+                                                    : predicted.toFixed(4)}
+                                            </span>
                                         </div>
-                                    )
-                                })()}
-                            </CardContent>
-                        </Card>
+
+                                        {/* 特徴量入力 */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                                            {features.slice(0, 20).map((r: any) => {
+                                                const fname = stripTablePrefix(r.feature)
+                                                const val = simValues[r.feature] ?? 0
+                                                const labels = colLabelsMap[r.feature] ?? colLabelsMap[stripTablePrefix(r.feature)]
+                                                return (
+                                                    <div key={r.feature} className="flex items-center gap-2">
+                                                        <span className="text-xs font-mono text-zinc-500 truncate flex-1 min-w-0" title={fname}>
+                                                            {fname}
+                                                        </span>
+                                                        {labels ? (
+                                                            <select
+                                                                value={String(simValues[r.feature] ?? Object.keys(labels)[0] ?? '0')}
+                                                                onChange={(e) => {
+                                                                    const num = parseFloat(e.target.value)
+                                                                    setSimValues(prev => ({
+                                                                        ...prev,
+                                                                        [r.feature]: isNaN(num) ? 0 : num,
+                                                                    }))
+                                                                }}
+                                                                className="w-32 h-7 text-xs border border-zinc-200 rounded px-2 bg-white focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                                                            >
+                                                                {Object.entries(labels).map(([rawVal, label]) => (
+                                                                    <option key={rawVal} value={rawVal}>{label}</option>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                value={val}
+                                                                onChange={(e) => {
+                                                                    const num = parseFloat(e.target.value)
+                                                                    setSimValues(prev => ({
+                                                                        ...prev,
+                                                                        [r.feature]: isNaN(num) ? 0 : num,
+                                                                    }))
+                                                                }}
+                                                                className="w-24 h-7 text-xs font-mono border border-zinc-200 rounded px-2 text-right bg-white focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+
+                                        {features.length > 20 && (
+                                            <p className="text-xs text-zinc-400 text-center">
+                                                上位20件の特徴量のみ表示しています
+                                            </p>
+                                        )}
+
+                                        <button
+                                            className="text-xs text-zinc-400 hover:text-zinc-700 underline"
+                                            onClick={() => setSimValues({})}
+                                        >
+                                            すべて0にリセット
+                                        </button>
+                                    </div>
+                                )
+                            })()}
+                        </section>
                     )}
 
                     {/* 決定木 可視化 */}
                     {result.model_type !== 'logistic_regression' && result.tree_structure && dtNodes.length > 0 && (
-                        <Card className="col-span-1 md:col-span-2">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <GitBranch className="w-5 h-5" /> 決定木 可視化
-                                </CardTitle>
-                                <CardDescription>
+                        <section className="py-5 border-b border-zinc-100">
+                            <div className="mb-4">
+                                <h2 className="text-sm font-medium text-zinc-700">決定木 可視化</h2>
+                                <p className="text-xs text-zinc-400 mt-0.5">
                                     最大深度 5 の決定木。青=分岐ノード（条件）、緑=葉ノード（予測結果）。ドラッグ・スクロールで移動/ズームできます。
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-0">
-                                <div style={{ height: 520 }} className="rounded-b-lg overflow-hidden border-t">
-                                    <ReactFlow
-                                        nodes={dtNodes}
-                                        edges={dtEdges}
-                                        onNodesChange={onDtNodesChange}
-                                        onEdgesChange={onDtEdgesChange}
-                                        nodeTypes={dtNodeTypes}
-                                        fitView
-                                        fitViewOptions={{ padding: 0.2 }}
-                                        nodesDraggable={false}
-                                        nodesConnectable={false}
-                                        elementsSelectable={false}
-                                    >
-                                        <Background gap={16} size={1} color="#e2e8f0" />
-                                        <Controls showInteractive={false} />
-                                    </ReactFlow>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                </p>
+                            </div>
+                            <div style={{ height: 520 }} className="rounded-lg overflow-hidden border border-zinc-200">
+                                <ReactFlow
+                                    nodes={dtNodes}
+                                    edges={dtEdges}
+                                    onNodesChange={onDtNodesChange}
+                                    onEdgesChange={onDtEdgesChange}
+                                    nodeTypes={dtNodeTypes}
+                                    fitView
+                                    fitViewOptions={{ padding: 0.2 }}
+                                    nodesDraggable={false}
+                                    nodesConnectable={false}
+                                    elementsSelectable={false}
+                                >
+                                    <Background gap={16} size={1} color="#e4e4e7" />
+                                    <Controls showInteractive={false} />
+                                </ReactFlow>
+                            </div>
+                        </section>
                     )}
 
                     {/* 分岐ルール一覧 */}
                     {result.model_type !== 'logistic_regression' && result.decision_rules && result.decision_rules.length > 0 && (
-                        <Card className="col-span-1 md:col-span-2">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <ListBullets className="w-5 h-5" /> 分岐ルール一覧
-                                </CardTitle>
-                                <CardDescription>
+                        <section className="py-5">
+                            <div className="mb-4">
+                                <h2 className="text-sm font-medium text-zinc-700">分岐ルール一覧</h2>
+                                <p className="text-xs text-zinc-400 mt-0.5">
                                     決定木から抽出した IF/THEN ルール
                                     {result.decision_rules[0]?.confidence != null
                                         ? '（確信度の高い順）'
                                         : '（安定度の高い順）'}
                                     。各ルールは葉ノードまでの条件パスを表します。
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-                                    {[...result.decision_rules]
-                                        .sort((a: any, b: any) =>
-                                            a.confidence != null
-                                                ? (b.confidence ?? 0) - (a.confidence ?? 0)   // 分類: 確信度降順
-                                                : (a.std ?? Infinity) - (b.std ?? Infinity)   // 回帰: std昇順（安定順）
-                                        )
-                                        .map((rule: any, idx: number) => (
-                                            <div key={idx} className="border rounded-lg p-3 bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                                                <div className="flex flex-wrap gap-1 mb-2">
-                                                    {rule.conditions.map((cond: string, ci: number) => (
-                                                        <span key={ci} className="inline-flex items-center gap-1 text-xs font-mono bg-card border rounded px-2 py-0.5">
-                                                            {ci > 0 && <span className="text-muted-foreground font-sans">AND</span>}
-                                                            {stripTablePrefix(cond)}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-xs text-muted-foreground">→ 予測:</span>
-                                                    <span className="font-semibold text-sm">{String(rule.prediction)}</span>
-                                                    {rule.confidence != null && (
-                                                        <Badge variant={confidenceBadge(rule.confidence) as any} className="text-xs">
-                                                            確信度 {Math.round(rule.confidence * 100)}%
-                                                        </Badge>
-                                                    )}
-                                                    {rule.std != null && (
-                                                        <Badge variant={stabilityBadge(rule.std, rule.prediction)} className="text-xs">
-                                                            安定度:{stabilityLabel(rule.std, rule.prediction)} &nbsp;±{rule.std}
-                                                        </Badge>
-                                                    )}
-                                                    <span className="text-xs text-muted-foreground ml-auto">n={rule.samples.toLocaleString()}</span>
-                                                </div>
+                                </p>
+                            </div>
+                            <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+                                {[...result.decision_rules]
+                                    .sort((a: any, b: any) =>
+                                        a.confidence != null
+                                            ? (b.confidence ?? 0) - (a.confidence ?? 0)
+                                            : (a.std ?? Infinity) - (b.std ?? Infinity)
+                                    )
+                                    .map((rule: any, idx: number) => (
+                                        <div key={idx} className="border border-zinc-200 rounded-lg p-3 bg-zinc-50 hover:bg-white transition-colors">
+                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                {rule.conditions.map((cond: string, ci: number) => (
+                                                    <span key={ci} className="inline-flex items-center gap-1 text-xs font-mono bg-white border border-zinc-200 rounded px-2 py-0.5">
+                                                        {ci > 0 && <span className="text-zinc-400 font-sans">AND</span>}
+                                                        {stripTablePrefix(cond)}
+                                                    </span>
+                                                ))}
                                             </div>
-                                        ))
-                                    }
-                                </div>
-                            </CardContent>
-                        </Card>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-xs text-zinc-400">→ 予測:</span>
+                                                <span className="font-semibold text-sm text-zinc-900">{String(rule.prediction)}</span>
+                                                {rule.confidence != null && (
+                                                    <Badge variant={confidenceBadge(rule.confidence) as any} className="text-xs">
+                                                        確信度 {Math.round(rule.confidence * 100)}%
+                                                    </Badge>
+                                                )}
+                                                {rule.std != null && (
+                                                    <Badge variant={stabilityBadge(rule.std, rule.prediction)} className="text-xs">
+                                                        安定度:{stabilityLabel(rule.std, rule.prediction)} &nbsp;±{rule.std}
+                                                    </Badge>
+                                                )}
+                                                <span className="text-xs text-zinc-400 ml-auto">n={rule.samples.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        </section>
                     )}
                 </div>
             )}
