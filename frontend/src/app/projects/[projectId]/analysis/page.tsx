@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { AppAlertDialog } from '@/components/ui/app-alert-dialog';
 import { useAppAlert } from '@/hooks/use-app-alert';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api'
 
 // ステップの定義（ラベルと番号の対応）
@@ -36,6 +36,7 @@ const STEPS = [
 export default function AnalysisConfigPage() {
     const params = useParams();
     const projectId = params.projectId as string;
+    const router = useRouter();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
 
@@ -128,6 +129,17 @@ export default function AnalysisConfigPage() {
     const handleSave = async () => {
         if (!mainTableId || !targetColumnId) return;
 
+        // 数値型目的変数に「分類」タスクを設定した場合は保存をブロック
+        const targetCol = getTargetColumn();
+        if (targetCol?.inferred_type === 'numeric' && taskType === 'classification') {
+            showAlert(
+                "設定エラー",
+                `目的変数「${targetCol.physical_name}」は数値型（連続値）ですが、タスクタイプが「分類」に設定されています。\n` +
+                "タスクタイプを「回帰」に変更してから保存してください。"
+            );
+            return;
+        }
+
         try {
             const payload = {
                 name: configName.trim(),
@@ -143,9 +155,8 @@ export default function AnalysisConfigPage() {
 
             const response = await apiClient.post(`/api/projects/${projectId}/analysis/config`, payload);
             localStorage.setItem('lastAnalysisConfigId', response.data.id);
-            // 保存成功後は一覧を再取得して最新状態を反映
-            await fetchConfigs();
-            showAlert("保存完了", "分析設定を保存しました。");
+            // 保存成功後はダッシュボードへ遷移する
+            router.push(`/projects/${projectId}/dashboard`);
 
         } catch (error) {
             console.error("保存に失敗しました", error);
@@ -465,26 +476,35 @@ export default function AnalysisConfigPage() {
                                 ))}
                             </div>
 
-                            {targetColumnId && (
-                                <Alert className="bg-primary/10 border-primary/20">
-                                    <AlertTitle className="text-primary">
-                                        予測タスク: {taskType === "regression" ? "回帰予測 (数値)" : "分類予測 (カテゴリ)"}
-                                    </AlertTitle>
-                                    <AlertDescription className="text-primary/90 text-xs mt-1">
-                                        {taskType === "regression"
-                                            ? "選択されたカラムは数値データです。売上金額や点数などの連続値を予測します。"
-                                            : "選択されたカラムはカテゴリデータ（または極端に少ない数値）です。クラス分類（はい/いいえ、A/B/Cなど）を行います。"}
-                                        <div className="mt-2">
-                                            <span
-                                                className="underline cursor-pointer hover:text-primary-foreground font-medium"
-                                                onClick={() => setTaskType(prev => prev === "regression" ? "classification" : "regression")}
-                                            >
-                                                タスクタイプを手動で切り替える ({taskType === "regression" ? "分類へ" : "回帰へ"})
-                                            </span>
-                                        </div>
-                                    </AlertDescription>
-                                </Alert>
-                            )}
+                            {targetColumnId && (() => {
+                                // 目的変数のinferred_typeとtaskTypeの不整合チェック
+                                const targetCol = getTargetColumn();
+                                const isMismatch = targetCol?.inferred_type === 'numeric' && taskType === 'classification';
+                                return (
+                                    <Alert className={isMismatch ? "bg-destructive/10 border-destructive/30" : "bg-primary/10 border-primary/20"}>
+                                        <AlertTitle className={isMismatch ? "text-destructive" : "text-primary"}>
+                                            {isMismatch
+                                                ? "⚠️ タスクタイプの不整合"
+                                                : `予測タスク: ${taskType === "regression" ? "回帰予測 (数値)" : "分類予測 (カテゴリ)"}`}
+                                        </AlertTitle>
+                                        <AlertDescription className={`${isMismatch ? "text-destructive/90" : "text-primary/90"} text-xs mt-1`}>
+                                            {isMismatch
+                                                ? `目的変数「${targetCol?.physical_name}」は数値型（連続値）ですが、タスクタイプが「分類」に設定されています。連続値に分類モデルを適用すると学習が失敗します。「回帰」に戻してください。`
+                                                : taskType === "regression"
+                                                    ? "選択されたカラムは数値データです。売上金額や点数などの連続値を予測します。"
+                                                    : "選択されたカラムはカテゴリデータ（または極端に少ない数値）です。クラス分類（はい/いいえ、A/B/Cなど）を行います。"}
+                                            <div className="mt-2">
+                                                <span
+                                                    className="underline cursor-pointer font-medium"
+                                                    onClick={() => setTaskType(prev => prev === "regression" ? "classification" : "regression")}
+                                                >
+                                                    タスクタイプを手動で切り替える ({taskType === "regression" ? "分類へ" : "回帰へ"})
+                                                </span>
+                                            </div>
+                                        </AlertDescription>
+                                    </Alert>
+                                );
+                            })()}
 
                             {/* モデル選択 */}
                             <div className="space-y-3 pt-2">

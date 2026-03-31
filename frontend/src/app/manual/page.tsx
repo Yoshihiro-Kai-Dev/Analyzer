@@ -410,10 +410,24 @@ export default function ManualPage() {
             />
 
             <SectionTitle><NumberCircleThree className="w-4 h-4 text-emerald-600" weight="fill" />特徴量重要度の確認</SectionTitle>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              横棒グラフで「どのカラムが予測に役立っているか」を確認できます。棒が長いほど重要です。
-              重要度が低いカラムはStep 3に戻って外し、再学習するとモデルをシンプルにできます。
+            <p className="text-sm font-medium text-foreground mt-3 mb-1">▶ 重要特徴量（Feature Importance）</p>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              全モデル共通で表示されます。横棒グラフで「どのカラムが予測の分岐に何回使われたか（重要度）」を示します。
+              棒が長いほどモデルが重視した特徴量です。重要度が低いカラムはStep 3に戻って外し、再学習するとモデルをシンプルにできます。
             </p>
+            <p className="text-sm font-medium text-foreground mt-4 mb-1">▶ 重要特徴量（SHAP）<span className="ml-2 text-xs font-normal text-muted-foreground">LightGBM のみ</span></p>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-2">
+              SHAP（SHapley Additive exPlanations）は、各特徴量が個々の予測値をどれだけ動かしたかを定量化した指標です。
+              Feature Importance との違いは「予測値への影響の方向性がわかる」点です。
+            </p>
+            <NiceTable
+              headers={["バーの色", "意味"]}
+              rows={[
+                ["赤（正の値）", "その特徴量が予測値を押し上げる方向に寄与している"],
+                ["青緑（負の値）", "その特徴量が予測値を押し下げる方向に寄与している"],
+              ]}
+            />
+            <Callout type="info">SHAP値は回帰・二値分類では符号あり（正負）で表示されます。多クラス分類では方向性が不明確なため絶対値の平均で表示されます。</Callout>
 
             <SectionTitle><NumberCircleFour className="w-4 h-4 text-emerald-600" weight="fill" />係数情報（線形モデルのみ）</SectionTitle>
             <NiceTable

@@ -12,3 +12,4 @@ statsmodels
 matplotlib
 python-jose[cryptography]
 bcrypt
+shap

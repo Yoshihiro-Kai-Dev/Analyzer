@@ -205,7 +205,9 @@ class TrainResult(Base):
     
     # 特徴量重要度をJSONで保存 [{"feature": "col_A", "importance": 0.5}, ...]
     feature_importance = Column(JSON, nullable=True)
-    
+    # SHAP値（LightGBMのみ）[{"feature": "col_A", "shap_value": 1.23}, ...]
+    shap_importance = Column(JSON, nullable=True)
+
     # AIによる分析コメント
     ai_analysis_text = Column(String, nullable=True, comment="AIによる分析コメント")
 

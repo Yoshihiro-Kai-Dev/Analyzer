@@ -28,6 +28,13 @@ from app.db import models  # noqa: F401 - 全モデルを読み込む
 target_metadata = Base.metadata
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """CSVアップロードで動的生成されるテーブルをautogenerateの対象外にする"""
+    if type_ == "table" and name.startswith("upload_p"):
+        return False
+    return True
+
+
 def get_database_url() -> str:
     """環境変数からDB接続URLを組み立てる"""
     db_user = os.getenv("DB_USER", "postgres")
@@ -46,6 +53,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -68,6 +76,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            include_object=include_object,
         )
 
         with context.begin_transaction():

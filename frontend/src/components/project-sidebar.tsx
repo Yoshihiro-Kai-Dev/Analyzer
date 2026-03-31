@@ -7,7 +7,7 @@ import { SidebarNav } from "@/components/sidebar-nav"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { apiClient } from "@/lib/api"
 import { removeToken, getToken } from "@/lib/auth"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 
 // JWTペイロードからユーザー名を取得する
 function getUsernameFromToken(): string | undefined {
@@ -33,6 +33,7 @@ interface StepStatus {
 
 export function ProjectSidebar({ projectId }: { projectId: string }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [stepStatus, setStepStatus] = useState<StepStatus>({ completedSteps: new Set() })
   const [username] = useState<string | undefined>(() => getUsernameFromToken())
@@ -76,7 +77,7 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
     }
 
     fetchSidebarData()
-  }, [projectId])
+  }, [projectId, pathname])
 
   // ログアウト処理
   const handleLogout = () => {
