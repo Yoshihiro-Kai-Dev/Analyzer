@@ -125,18 +125,29 @@ def delete_config(
 
 
 @router.get("/suggest_features")
-def suggest_features(project_id: int, main_table_id: int, db: Session = Depends(get_db)):
+def suggest_features(project_id: int, main_table_id: int, target_column_id: int = None, db: Session = Depends(get_db)):
     """
-    選択されたメインテーブルに基づいて、生成可能な特徴量を提案する。
-    結合されているテーブルのカラムを集約（合計、平均、件数など）する提案を行う。
+    選択されたメインテーブルに基づいて、使用可能な特徴量を提案する。
+    メインテーブル自身のカラム（目的変数を除く）と、
+    結合テーブルからの派生特徴量の両方を返す。
     """
-    # リレーション情報を取得
-    # main_table_id が parent または child になっているリレーションを探す
-    # 基本的に main_table が "Parent" (1側) で、"Child" (N側) を集約するのが一般的 (OneToManyの場合)
-    # あるいは main_table が "Child" で "Parent" を結合する場合 (OneToOne, ManyToOne) はそのままカラムを使える
-    
     suggestions = []
-    
+
+    # CASE 0: メインテーブル自身のカラム（目的変数を除く）
+    main_table = db.query(models.TableMetadata).filter(models.TableMetadata.id == main_table_id).first()
+    if main_table:
+        for col in main_table.columns:
+            # 目的変数は特徴量にしない
+            if target_column_id and col.id == target_column_id:
+                continue
+            suggestions.append({
+                "suggestion_type": "direct",
+                "table_name": main_table.physical_table_name,
+                "column_name": col.physical_name,
+                "operations": ["value"],
+                "description": f"{main_table.original_filename} の {col.display_name}"
+            })
+
     # CASE 1: Main Table (1) <- Relation (N) Child Table
     # Child TableのデータをMain Tableのキーで集約する
     # DBの定義上は parent_id, child_id なので、どっちがどっちかを確認

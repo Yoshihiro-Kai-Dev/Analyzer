@@ -7,7 +7,7 @@ import statsmodels.api as sm
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, roc_auc_score, precision_score, recall_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression, SGDClassifier, SGDRegressor
 from sklearn.utils.multiclass import type_of_target
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.tree import _tree as sk_tree
@@ -70,12 +70,38 @@ class MLService:
             self.db.commit()
             
             X, y, feature_names, encoders = self._preprocess_data(df, config)
+            # 前処理済みのdfは不要なので即座に解放
+            del df
+            import gc; gc.collect()
+
             logger.info(f"[ML-JOB] Preprocessing done. X.shape={X.shape}, y.shape={y.shape}, y.dtype={y.dtype}")
             logger.info(f"[ML-JOB] y sample: {y.head(5).tolist() if hasattr(y, 'head') else y[:5]}")
-            
+
+            # メモリ安全策: 大規模データはサンプリング + float32変換
+            LARGE_DATA_THRESHOLD = 500_000  # 50万行以上で大規模データモード
+            MAX_ROWS_FOR_TRAINING = 2_000_000  # 学習に使う最大行数
+            is_large_data = X.shape[0] > LARGE_DATA_THRESHOLD
+
+            if X.shape[0] > MAX_ROWS_FOR_TRAINING:
+                # メモリ不足防止: ランダムサンプリングで行数を制限
+                logger.info(f"[ML-JOB] データが大きすぎるためサンプリング: {X.shape[0]:,}行 → {MAX_ROWS_FOR_TRAINING:,}行")
+                job.message = f"データをサンプリング中（{X.shape[0]:,}行 → {MAX_ROWS_FOR_TRAINING:,}行）..."
+                self.db.commit()
+                sample_idx = np.random.RandomState(42).choice(len(X), MAX_ROWS_FOR_TRAINING, replace=False)
+                X = X.iloc[sample_idx].reset_index(drop=True)
+                y = y.iloc[sample_idx].reset_index(drop=True)
+                gc.collect()
+
+            if is_large_data:
+                logger.info(f"[ML-JOB] 大規模データモード: {X.shape[0]:,}行 → float32に変換")
+                # in-placeで変換し、元のfloat64を解放
+                for col in X.columns:
+                    X[col] = X[col].astype(np.float32)
+                gc.collect()
+
             job.progress = 50
             self.db.commit()
-            
+
             # 3. 学習 (model_type に応じて分岐)
             model_type = getattr(config, 'model_type', None) or 'gradient_boosting'
             job.message = f"Training ({config.task_type} / {model_type})..."
@@ -98,40 +124,128 @@ class MLService:
                 # ── sklearn ロジスティック回帰 / 線形回帰 ──────────────────
                 # sklearn の線形モデルはスケールに敏感なため StandardScaler を適用
                 scaler = StandardScaler()
-                X_train_s = pd.DataFrame(scaler.fit_transform(X_train), columns=feature_names)
-                X_test_s  = pd.DataFrame(scaler.transform(X_test),      columns=feature_names)
 
-                if config.task_type == 'classification':
-                    sk_model = LogisticRegression(
-                        max_iter=1000, C=1.0, random_state=42, solver='lbfgs'
+                if is_large_data:
+                    # ── 大規模データ: チャンク単位で StandardScaler を partial_fit ──
+                    job.message = "スケーリング中（大規模データモード）..."
+                    self.db.commit()
+                    chunk_size = 50_000
+                    n_chunks = int(np.ceil(len(X_train) / chunk_size))
+                    for i in range(n_chunks):
+                        start = i * chunk_size
+                        end = min((i + 1) * chunk_size, len(X_train))
+                        scaler.partial_fit(X_train.iloc[start:end])
+                        progress = 50 + int((i + 1) / n_chunks * 5)  # 50-55%
+                        job.progress = progress
+                        job.message = f"スケーリング中... ({i + 1}/{n_chunks})"
+                        self.db.commit()
+
+                    # transform もチャンク単位で行い、元のDataFrameを上書きしてメモリ節約
+                    X_train_s = pd.DataFrame(
+                        np.vstack([scaler.transform(X_train.iloc[i*chunk_size:(i+1)*chunk_size])
+                                   for i in range(n_chunks)]),
+                        columns=feature_names
                     )
-                    sk_model.fit(X_train_s, y_train)
-                    y_pred = sk_model.predict(X_test_s)
-                    # 係数の絶対値を特徴量重要度として使用
-                    coef = sk_model.coef_
-                    raw_imp = np.abs(coef).mean(axis=0)  # binary(1, n) / multiclass(k, n) 両対応
+                    X_test_s = pd.DataFrame(scaler.transform(X_test), columns=feature_names)
+                    # 元データを解放
+                    del X_train, X_test
+                    import gc; gc.collect()
                 else:
-                    sk_model = LinearRegression()
-                    sk_model.fit(X_train_s, y_train)
-                    y_pred = sk_model.predict(X_test_s)
-                    raw_imp = np.abs(sk_model.coef_)
+                    X_train_s = pd.DataFrame(scaler.fit_transform(X_train), columns=feature_names)
+                    X_test_s  = pd.DataFrame(scaler.transform(X_test),      columns=feature_names)
+
+                if is_large_data:
+                    # ── 大規模データ: SGD（ミニバッチ学習）を使用 ──
+                    job.message = "学習中（大規模データモード: SGD）..."
+                    self.db.commit()
+                    n_epochs = 5
+                    chunk_size = 50_000
+                    n_chunks = int(np.ceil(len(X_train_s) / chunk_size))
+
+                    if config.task_type == 'classification':
+                        classes = np.unique(y_train)
+                        sk_model = SGDClassifier(
+                            loss='log_loss', alpha=1e-4, random_state=42, max_iter=1
+                        )
+                        for epoch in range(n_epochs):
+                            # エポックごとにデータをシャッフル
+                            indices = np.random.RandomState(42 + epoch).permutation(len(X_train_s))
+                            for i in range(n_chunks):
+                                chunk_idx = indices[i*chunk_size:(i+1)*chunk_size]
+                                sk_model.partial_fit(
+                                    X_train_s.iloc[chunk_idx], y_train.iloc[chunk_idx],
+                                    classes=classes
+                                )
+                            progress = 55 + int((epoch + 1) / n_epochs * 15)  # 55-70%
+                            job.progress = progress
+                            job.message = f"学習中... エポック {epoch + 1}/{n_epochs}"
+                            self.db.commit()
+
+                        y_pred = sk_model.predict(X_test_s)
+                        coef = sk_model.coef_
+                        raw_imp = np.abs(coef).mean(axis=0)
+                    else:
+                        sk_model = SGDRegressor(
+                            loss='squared_error', alpha=1e-4, random_state=42, max_iter=1
+                        )
+                        for epoch in range(n_epochs):
+                            indices = np.random.RandomState(42 + epoch).permutation(len(X_train_s))
+                            for i in range(n_chunks):
+                                chunk_idx = indices[i*chunk_size:(i+1)*chunk_size]
+                                sk_model.partial_fit(
+                                    X_train_s.iloc[chunk_idx], y_train.iloc[chunk_idx]
+                                )
+                            progress = 55 + int((epoch + 1) / n_epochs * 15)  # 55-70%
+                            job.progress = progress
+                            job.message = f"学習中... エポック {epoch + 1}/{n_epochs}"
+                            self.db.commit()
+
+                        y_pred = sk_model.predict(X_test_s)
+                        raw_imp = np.abs(sk_model.coef_)
+
+                    logger.info(f"[ML-JOB] {type(sk_model).__name__} trained (large data mode).")
+                else:
+                    if config.task_type == 'classification':
+                        sk_model = LogisticRegression(
+                            max_iter=1000, C=1.0, random_state=42, solver='lbfgs'
+                        )
+                        sk_model.fit(X_train_s, y_train)
+                        y_pred = sk_model.predict(X_test_s)
+                        coef = sk_model.coef_
+                        raw_imp = np.abs(coef).mean(axis=0)
+                    else:
+                        sk_model = LinearRegression()
+                        sk_model.fit(X_train_s, y_train)
+                        y_pred = sk_model.predict(X_test_s)
+                        raw_imp = np.abs(sk_model.coef_)
+
+                    logger.info(f"[ML-JOB] {type(sk_model).__name__} trained.")
 
                 # 0–100 にスケーリング（LightGBM の split カウントと単位を揃えるため）
                 total_imp = raw_imp.sum() + 1e-10
                 importance = raw_imp / total_imp * 100
-
-                logger.info(f"[ML-JOB] {type(sk_model).__name__} trained.")
 
                 # モデル保存 (joblib)
                 model_path = os.path.join(MODEL_DIR, f"model_{job_id}.pkl")
                 joblib.dump({'model': sk_model, 'scaler': scaler}, model_path)
 
                 # ── statsmodels による統計量計算 ──────────────────────────
-                job.message = "Computing statistical metrics..."
+                # 大規模データではサンプリングしてからstatsmodelsを実行（OOM防止）
+                job.message = "係数統計量を計算中..."
                 self.db.commit()
-                coef_stats = self._compute_coef_stats(
-                    X_train_s, y_train, feature_names, config.task_type
-                )
+                MAX_ROWS_STATSMODELS = 50_000
+                if is_large_data and len(X_train_s) > MAX_ROWS_STATSMODELS:
+                    logger.info(f"[ML-JOB] statsmodels用にサンプリング: {len(X_train_s):,}行 → {MAX_ROWS_STATSMODELS:,}行")
+                    sample_idx = np.random.RandomState(42).choice(len(X_train_s), MAX_ROWS_STATSMODELS, replace=False)
+                    X_train_sampled = X_train_s.iloc[sample_idx].reset_index(drop=True) if hasattr(X_train_s, 'iloc') else X_train_s[sample_idx]
+                    y_train_sampled = y_train.iloc[sample_idx].reset_index(drop=True) if hasattr(y_train, 'iloc') else y_train[sample_idx]
+                    coef_stats = self._compute_coef_stats(
+                        X_train_sampled, y_train_sampled, feature_names, config.task_type
+                    )
+                else:
+                    coef_stats = self._compute_coef_stats(
+                        X_train_s, y_train, feature_names, config.task_type
+                    )
 
             else:
                 # ── LightGBM 勾配ブースティング (既存実装) ──────────────────
@@ -154,7 +268,12 @@ class MLService:
                 sk_model = (lgb.LGBMRegressor(**params) if config.task_type == 'regression'
                             else lgb.LGBMClassifier(**params))
                 logger.info(f"[ML-JOB] Model created: {type(sk_model)}")
+                job.message = "LightGBM 学習中..."
+                self.db.commit()
                 sk_model.fit(X_train, y_train, eval_set=[(X_test, y_test)])
+                job.progress = 70
+                job.message = "予測中..."
+                self.db.commit()
                 y_pred = sk_model.predict(X_test)
                 importance = sk_model.feature_importances_
 
@@ -169,7 +288,9 @@ class MLService:
                 shap_list = None
                 try:
                     shap_explainer = shap_lib.TreeExplainer(sk_model)
-                    shap_matrix = shap_explainer.shap_values(X_test)
+                    # 大規模データではメモリ不足を防ぐためサンプリングする（最大5000行）
+                    shap_sample = X_test.sample(n=min(5000, len(X_test)), random_state=42) if len(X_test) > 5000 else X_test
+                    shap_matrix = shap_explainer.shap_values(shap_sample)
                     # multiclass分類の場合はクラスごとの配列リストになる
                     # 方向性が不明確なため絶対値の平均で統合する
                     if isinstance(shap_matrix, list):
@@ -198,6 +319,8 @@ class MLService:
 
             # trainデータへの予測（過学習検出用）
             # logistic_regression はロジスティック回帰・線形回帰の両方を含む（StandardScaler 適用済みの X_train_s を使用）
+            job.message = "評価指標を計算中..."
+            self.db.commit()
             if model_type == 'logistic_regression':
                 y_train_pred = sk_model.predict(X_train_s)
             else:
@@ -235,7 +358,14 @@ class MLService:
                         logger.warning(f"[ML-JOB] AUC computation failed: {e}")
 
             # 5. 特徴量重要度 & 相関係数
-            full_correlations = X.corrwith(y)
+            job.message = "特徴量重要度を計算中..."
+            self.db.commit()
+            # 大規模データでは相関計算をサンプリングで行う
+            if is_large_data and len(X) > 100_000:
+                sample_idx = np.random.RandomState(42).choice(len(X), 100_000, replace=False)
+                full_correlations = X.iloc[sample_idx].corrwith(y.iloc[sample_idx])
+            else:
+                full_correlations = X.corrwith(y)
 
             fi_list = []
             for name, imp in zip(feature_names, importance):
@@ -258,12 +388,21 @@ class MLService:
                 decision_rules = None
                 logger.info("[ML-JOB] Skipping decision tree (linear model selected).")
             else:
-                job.message = "Training Decision Tree..."
+                job.message = "決定木を学習中..."
+                job.progress = 90
                 self.db.commit()
 
                 n_classes  = int(y.nunique()) if config.task_type == "classification" else None
                 class_names = [str(c) for c in sorted(y.unique())] if config.task_type == "classification" else None
-                dt_model = self._train_decision_tree(X_train, y_train, config.task_type, n_classes)
+                # 大規模データでは決定木学習用にサンプリング（最大10万行）
+                if is_large_data and len(X_train) > 100_000:
+                    dt_sample_idx = np.random.RandomState(42).choice(len(X_train), 100_000, replace=False)
+                    dt_X = X_train.iloc[dt_sample_idx]
+                    dt_y = y_train.iloc[dt_sample_idx]
+                else:
+                    dt_X = X_train
+                    dt_y = y_train
+                dt_model = self._train_decision_tree(dt_X, dt_y, config.task_type, n_classes)
                 tree_structure = self._sanitize_for_json(
                     self._extract_tree_structure(dt_model, feature_names, class_names)
                 )
@@ -272,6 +411,9 @@ class MLService:
                 )
 
             # 8. 保存
+            job.progress = 95
+            job.message = "結果を保存中..."
+            self.db.commit()
             result = models.TrainResult(
                 job_id=job.id,
                 metrics=metrics,
@@ -311,7 +453,18 @@ class MLService:
         # ターゲットカラムは必ず必要
         # TODO: chunking / Memory optimisation
         # テーブル名を二重引用符でクォートして日本語・特殊文字を含む名前に対応
-        main_df = pd.read_sql(f'SELECT * FROM "{main_table_name}"', self.engine)
+        # まず行数を確認し、大きすぎる場合はSQLレベルでサンプリング
+        row_count_result = pd.read_sql(f'SELECT COUNT(*) as cnt FROM "{main_table_name}"', self.engine)
+        total_rows = int(row_count_result['cnt'].iloc[0])
+        MAX_ROWS_FROM_DB = 2_000_000
+        if total_rows > MAX_ROWS_FROM_DB:
+            logger.info(f"[ML-JOB] メインテーブルが大きいためSQLサンプリング: {total_rows:,}行 → {MAX_ROWS_FROM_DB:,}行")
+            main_df = pd.read_sql(
+                f'SELECT * FROM "{main_table_name}" ORDER BY RANDOM() LIMIT {MAX_ROWS_FROM_DB}',
+                self.engine
+            )
+        else:
+            main_df = pd.read_sql(f'SELECT * FROM "{main_table_name}"', self.engine)
         
         # 2. Join Relations (OneToMany -> Aggregation)
         # config.feature_settings に従って集約... としたいが、
@@ -384,7 +537,17 @@ class MLService:
             dup_cols = [c for c in main_df.columns if c.endswith('_dup')]
             if dup_cols:
                 main_df = main_df.drop(columns=dup_cols)
-            
+
+        # メモリ安全策: 結合後にデータが膨張した場合はサンプリング
+        MAX_ROWS = 2_000_000
+        if len(main_df) > MAX_ROWS:
+            logger.warning(
+                f"[ML-JOB] 結合後のデータが大きすぎるためサンプリング: "
+                f"{len(main_df):,}行 → {MAX_ROWS:,}行"
+            )
+            main_df = main_df.sample(n=MAX_ROWS, random_state=42).reset_index(drop=True)
+            import gc; gc.collect()
+
         return main_df
 
     def _preprocess_data(self, df: pd.DataFrame, config: models.AnalysisConfig):
@@ -401,7 +564,42 @@ class MLService:
         
         y = df[target_col_name]
         X = df.drop(columns=[target_col_name])
-        
+
+        # feature_settings に基づく特徴量フィルタリング
+        # ユーザーが分析設定画面で選択した特徴量のみを使用する
+        # （メインテーブルのカラムも含め、すべて feature_settings の選択に従う）
+        if config.feature_settings and isinstance(config.feature_settings, dict) and "details" in config.feature_settings:
+            details = config.feature_settings.get("details") or []
+
+            # 選択された特徴量のカラム名を生成
+            selected_cols = set()
+            for detail in details:
+                stype = detail.get("suggestion_type")
+                col_name = detail.get("column_name")
+                if not col_name:
+                    continue
+
+                if stype == "direct":
+                    # メインテーブルのカラム: そのまま
+                    selected_cols.add(col_name)
+                elif stype == "aggregation":
+                    # _prepare_data が生成する集約カラム: {col}_{stat}
+                    for stat in ["sum", "mean"]:
+                        selected_cols.add(f"{col_name}_{stat}")
+                elif stype == "join":
+                    # ManyToOne結合: 元のカラム名がそのまま使われる
+                    selected_cols.add(col_name)
+                elif stype == "count":
+                    # レコード件数集約（将来対応用）
+                    pass
+
+            # 選択されたカラムのみ残す
+            cols_to_keep = [c for c in X.columns if c in selected_cols]
+            dropped_by_settings = set(X.columns) - set(cols_to_keep)
+            if dropped_by_settings:
+                logger.info(f"[ML-JOB] feature_settings に基づき {len(dropped_by_settings)} カラムを除外: {dropped_by_settings}")
+            X = X[cols_to_keep]
+
         # 不要なIDカラムなどを除外
         # 簡易ロジック:
         # 1. カラム名に 'id', 'code', 'no' などが含まれる (case insensitive)
@@ -521,7 +719,26 @@ class MLService:
                     return None
 
                 # ── Logit (二値ロジスティック回帰) ──────────────────────
-                sm_result = sm.Logit(y_arr, X_sm).fit(method='bfgs', maxiter=300, disp=False)
+                # ヘシアン逆行列が求まらない場合があるため複数手法で試行
+                logit_model = sm.Logit(y_arr, X_sm)
+                sm_result = None
+                for fit_method in ['lbfgs', 'bfgs', 'newton']:
+                    try:
+                        candidate = logit_model.fit(method=fit_method, maxiter=300, disp=False)
+                        if not np.isnan(candidate.pvalues).all():
+                            sm_result = candidate
+                            logger.info(f"[ML-JOB] Logit fitted successfully with method={fit_method}")
+                            break
+                        logger.warning(f"[ML-JOB] Logit {fit_method}: pvalues all NaN, trying next method")
+                    except Exception as fit_err:
+                        logger.warning(f"[ML-JOB] Logit {fit_method} failed: {fit_err}")
+                        continue
+
+                if sm_result is None:
+                    # すべて失敗した場合は最後の結果を使う（p値なしでも係数は返す）
+                    logger.warning("[ML-JOB] All Logit methods failed to produce valid pvalues, using lbfgs result")
+                    sm_result = logit_model.fit(method='lbfgs', maxiter=300, disp=False)
+
                 ci = sm_result.conf_int()
 
                 stats = []
@@ -734,7 +951,10 @@ class MLService:
 
     @staticmethod
     def _sanitize_for_json(obj):
-        """NumPy 型を再帰的に Python ネイティブ型へ変換する（JSON シリアライズ対策）"""
+        """NumPy 型を再帰的に Python ネイティブ型へ変換する（JSON シリアライズ対策）
+        NaN / Inf も None に変換する（PostgreSQL JSON カラムは NaN を受け付けない）
+        """
+        import math
         if isinstance(obj, dict):
             return {k: MLService._sanitize_for_json(v) for k, v in obj.items()}
         if isinstance(obj, list):
@@ -742,11 +962,14 @@ class MLService:
         if isinstance(obj, np.integer):
             return int(obj)
         if isinstance(obj, np.floating):
-            return float(obj)
+            val = float(obj)
+            return None if math.isnan(val) or math.isinf(val) else val
+        if isinstance(obj, float):
+            return None if math.isnan(obj) or math.isinf(obj) else obj
         if isinstance(obj, np.bool_):
             return bool(obj)
         if isinstance(obj, np.ndarray):
-            return obj.tolist()
+            return MLService._sanitize_for_json(obj.tolist())
         return obj
 
     def _train_decision_tree(self, X_train, y_train, task_type: str, n_classes: int | None):
@@ -756,7 +979,8 @@ class MLService:
         common_params = dict(max_depth=5, min_samples_leaf=min_leaf, random_state=42)
 
         if task_type == "classification":
-            dt = DecisionTreeClassifier(**common_params)
+            # 不均衡データでも少数派クラスのルールを抽出できるよう重み調整
+            dt = DecisionTreeClassifier(**common_params, class_weight='balanced')
         else:
             dt = DecisionTreeRegressor(**common_params)
 
