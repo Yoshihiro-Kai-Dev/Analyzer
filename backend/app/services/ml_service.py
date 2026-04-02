@@ -5,7 +5,7 @@ import joblib
 import shap as shap_lib
 import statsmodels.api as sm
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, roc_auc_score, f1_score, precision_score, recall_score
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, roc_auc_score, precision_score, recall_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.utils.multiclass import type_of_target
@@ -197,6 +197,7 @@ class MLService:
             logger.info(f"[ML-JOB] Prediction done. y_pred sample: {y_pred[:5]}")
 
             # trainデータへの予測（過学習検出用）
+            # logistic_regression はロジスティック回帰・線形回帰の両方を含む（StandardScaler 適用済みの X_train_s を使用）
             if model_type == 'logistic_regression':
                 y_train_pred = sk_model.predict(X_train_s)
             else:
@@ -632,9 +633,10 @@ class MLService:
                 lines.append("ℹ Precision/Recallが計算できなかったため、チェックをスキップしました。")
 
         # ── 4. 特徴量の支配度チェック ──
+        # セクション4・5で共通利用するため、重要度合計を一度だけ計算する
+        total_importance = sum(f['importance'] for f in fi_list) if fi_list else 0
         lines.append("\n### 特徴量の支配度")
         if fi_list:
-            total_importance = sum(f['importance'] for f in fi_list)
             if total_importance > 0:
                 top_ratio = fi_list[0]['importance'] / total_importance
                 top_name = fi_list[0]['feature']
@@ -655,7 +657,6 @@ class MLService:
         # ── 5. 低寄与特徴量の指摘 ──
         lines.append("\n### 低寄与の特徴量")
         if fi_list:
-            total_importance = sum(f['importance'] for f in fi_list)
             if total_importance > 0:
                 low_features = [f for f in fi_list if f['importance'] / total_importance < 0.01]
                 if low_features:
