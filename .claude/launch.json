@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wireframe",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "../wireframes", "-l", "3456", "--no-clipboard"],
+      "port": 3456
+    }
+  ]
+}

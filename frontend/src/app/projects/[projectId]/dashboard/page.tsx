@@ -115,7 +115,8 @@ function layoutTree(rawNodes: Node[], rawEdges: Edge[]) {
 }
 
 // ── p値 → 有意性ラベル ────────────────────────────────────────
-function pValueLabel(p: number): { mark: string; color: string } {
+function pValueLabel(p: number | null | undefined): { mark: string; color: string } {
+    if (p == null) return { mark: '—', color: 'text-muted-foreground' };
     if (p < 0.001) return { mark: '***', color: 'text-green-600' };
     if (p < 0.01)  return { mark: '**',  color: 'text-green-500' };
     if (p < 0.05)  return { mark: '*',   color: 'text-yellow-500' };
@@ -759,14 +760,18 @@ export default function DashboardPage() {
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td className={`px-3 py-2 text-right font-semibold tabular-nums ${mainVal > 1 || mainVal >= 0 ? 'text-destructive' : 'text-primary'}`}>
-                                                        {mainVal.toFixed(3)}
+                                                    <td className={`px-3 py-2 text-right font-semibold tabular-nums ${mainVal != null && (mainVal > 1 || mainVal >= 0) ? 'text-destructive' : 'text-primary'}`}>
+                                                        {mainVal != null ? mainVal.toFixed(3) : '—'}
                                                     </td>
                                                     <td className="px-3 py-2 text-right text-xs text-zinc-400 tabular-nums">
-                                                        [{row.ci_lower.toFixed(3)}, {row.ci_upper.toFixed(3)}]
+                                                        {row.ci_lower != null && row.ci_upper != null
+                                                            ? `[${row.ci_lower.toFixed(3)}, ${row.ci_upper.toFixed(3)}]`
+                                                            : '—'}
                                                     </td>
                                                     <td className="px-3 py-2 text-right tabular-nums text-xs text-zinc-600">
-                                                        {row.p_value < 0.001 ? '< 0.001' : row.p_value.toFixed(3)}
+                                                        {row.p_value != null
+                                                            ? (row.p_value < 0.001 ? '< 0.001' : row.p_value.toFixed(3))
+                                                            : '—'}
                                                     </td>
                                                     <td className={`px-3 py-2 text-center font-bold text-sm ${sig.color}`}>
                                                         {sig.mark}
@@ -976,20 +981,25 @@ export default function DashboardPage() {
                             <div className="mb-4">
                                 <h2 className="text-sm font-medium text-zinc-700">分岐ルール一覧</h2>
                                 <p className="text-xs text-zinc-400 mt-0.5">
-                                    決定木から抽出した IF/THEN ルール
+                                    決定木から抽出した IF/THEN ルール。各ルールは葉ノードまでの条件パスを表します。
                                     {result.decision_rules[0]?.confidence != null
-                                        ? '（確信度の高い順）'
-                                        : '（安定度の高い順）'}
-                                    。各ルールは葉ノードまでの条件パスを表します。
+                                        ? '分類タスクでは陽性クラス（1）のルールを優先表示します。'
+                                        : '安定度の高い順に表示します。'}
                                 </p>
                             </div>
                             <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
                                 {[...result.decision_rules]
-                                    .sort((a: any, b: any) =>
-                                        a.confidence != null
-                                            ? (b.confidence ?? 0) - (a.confidence ?? 0)
-                                            : (a.std ?? Infinity) - (b.std ?? Infinity)
-                                    )
+                                    .sort((a: any, b: any) => {
+                                        if (a.confidence != null) {
+                                            // 分類: 陽性クラス（0以外）を優先し、その中で確信度降順
+                                            const aPositive = String(a.prediction) !== '0' ? 1 : 0;
+                                            const bPositive = String(b.prediction) !== '0' ? 1 : 0;
+                                            if (aPositive !== bPositive) return bPositive - aPositive;
+                                            return (b.confidence ?? 0) - (a.confidence ?? 0);
+                                        }
+                                        // 回帰: 安定度（std）の低い順
+                                        return (a.std ?? Infinity) - (b.std ?? Infinity);
+                                    })
                                     .map((rule: any, idx: number) => (
                                         <div key={idx} className="border border-zinc-200 rounded-lg p-3 bg-zinc-50 hover:bg-white transition-colors">
                                             <div className="flex flex-wrap gap-1 mb-2">

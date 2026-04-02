@@ -10,7 +10,9 @@
       "Bash(cat C:/Work/Analyzer/.superpowers/brainstorm/1478-1774830672/state/*)",
       "Bash(C:/Users/n0273/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/skills/brainstorming/scripts/start-server.sh --project-dir C:/Work/Analyzer)",
       "Bash(docker compose:*)",
-      "Bash(grep -n \"data={result.feature_importance\" /c/Work/Analyzer/frontend/src/app/projects/[projectId]/dashboard/page.tsx)"
+      "Bash(grep -n \"data={result.feature_importance\" /c/Work/Analyzer/frontend/src/app/projects/[projectId]/dashboard/page.tsx)",
+      "Bash(find /c/Work/Analyzer/frontend/src -type f \\\\\\(-name *.tsx -o -name *.css \\\\\\))",
+      "mcp__Claude_Preview__preview_start"
     ],
     "defaultMode": "bypassPermissions"
   }

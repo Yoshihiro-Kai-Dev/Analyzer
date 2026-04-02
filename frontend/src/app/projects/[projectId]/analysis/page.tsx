@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle, CaretRight, Warning, FloppyDisk, Trash, CircleNotch } from '@phosphor-icons/react';
+import { CheckCircle, CaretRight, Warning, FloppyDisk, Trash, CircleNotch, PencilSimple } from '@phosphor-icons/react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import {
@@ -66,6 +66,9 @@ export default function AnalysisConfigPage() {
     const [validationError, setValidationError] = useState<string | null>(null);
     const { alertState, showAlert, closeAlert } = useAppAlert();
 
+    // 編集モード: 既存設定を編集中の場合にその設定IDを保持する
+    const [editingConfigId, setEditingConfigId] = useState<number | null>(null);
+
     // 既存の分析設定一覧を取得する関数
     const fetchConfigs = async () => {
         setLoadingConfigs(true);
@@ -95,12 +98,13 @@ export default function AnalysisConfigPage() {
     }, [projectId]);
 
     // Step 3 に入ったときに特徴量提案を取得
+    // 編集モードで Step 3 に直接遷移した場合は handleEditConfig 内で取得済みなのでスキップ
     useEffect(() => {
-        if (step === 3 && mainTableId && projectId) {
+        if (step === 3 && mainTableId && targetColumnId && projectId && !editingConfigId) {
             const fetchSuggestions = async () => {
                 setLoading(true);
                 try {
-                    const response = await apiClient.get(`/api/projects/${projectId}/analysis/suggest_features?main_table_id=${mainTableId}`);
+                    const response = await apiClient.get(`/api/projects/${projectId}/analysis/suggest_features?main_table_id=${mainTableId}&target_column_id=${targetColumnId}`);
                     setSuggestions(response.data);
                     // デフォルトですべての特徴量を選択済みにする
                     setSelectedFeatureIndices(response.data.map((_: unknown, idx: number) => idx));
@@ -112,7 +116,7 @@ export default function AnalysisConfigPage() {
             };
             fetchSuggestions();
         }
-    }, [step, mainTableId, projectId]);
+    }, [step, mainTableId, targetColumnId, projectId, editingConfigId]);
 
     const handleNext = () => {
         if (step === 1 && !configName.trim()) { setValidationError("設定名を入力してください"); return; }
@@ -153,8 +157,18 @@ export default function AnalysisConfigPage() {
                 }
             };
 
-            const response = await apiClient.post(`/api/projects/${projectId}/analysis/config`, payload);
-            localStorage.setItem('lastAnalysisConfigId', response.data.id);
+            let savedId: number;
+            if (editingConfigId) {
+                // 既存設定の更新
+                const response = await apiClient.put(`/api/projects/${projectId}/analysis/config/${editingConfigId}`, payload);
+                savedId = response.data.id;
+                setEditingConfigId(null);
+            } else {
+                // 新規作成
+                const response = await apiClient.post(`/api/projects/${projectId}/analysis/config`, payload);
+                savedId = response.data.id;
+            }
+            localStorage.setItem('lastAnalysisConfigId', savedId.toString());
             // 保存成功後はダッシュボードへ遷移する
             router.push(`/projects/${projectId}/dashboard`);
 
@@ -216,6 +230,60 @@ export default function AnalysisConfigPage() {
         }
     };
 
+    // 編集ボタンクリック時：既存設定の値をウィザードにロードする
+    const handleEditConfig = async (config: any) => {
+        setEditingConfigId(config.id);
+        setConfigName(config.name || "");
+        setMainTableId(config.main_table_id?.toString() || "");
+        setTargetColumnId(config.target_column_id?.toString() || "");
+        setTaskType(config.task_type || "regression");
+        setModelType(config.model_type || "gradient_boosting");
+        setValidationError(null);
+
+        // 特徴量提案を再取得し、保存済みの選択状態を復元する
+        try {
+            const res = await apiClient.get(
+                `/api/projects/${projectId}/analysis/suggest_features?main_table_id=${config.main_table_id}&target_column_id=${config.target_column_id}`
+            );
+            setSuggestions(res.data);
+
+            // feature_settings.details のカラム名セットを作成して、
+            // 新しい suggestions のインデックスと照合する
+            const savedDetails: any[] = config.feature_settings?.details || [];
+            const savedKeys = new Set(
+                savedDetails.map((d: any) => `${d.suggestion_type}:${d.column_name}`)
+            );
+            const restoredIndices = res.data
+                .map((s: any, idx: number) => savedKeys.has(`${s.suggestion_type}:${s.column_name}`) ? idx : -1)
+                .filter((i: number) => i >= 0);
+            setSelectedFeatureIndices(restoredIndices);
+        } catch {
+            setSuggestions([]);
+            setSelectedFeatureIndices([]);
+        }
+
+        // Step 3（特徴量設定）に直接遷移
+        setStep(3);
+
+        // ウィザード部分にスクロール
+        setTimeout(() => {
+            document.getElementById('analysis-wizard')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    };
+
+    // 新規作成モードに切り替え（編集をキャンセル）
+    const handleCancelEdit = () => {
+        setEditingConfigId(null);
+        setConfigName("");
+        setMainTableId("");
+        setTargetColumnId("");
+        setTaskType("regression");
+        setModelType("gradient_boosting");
+        setSuggestions([]);
+        setSelectedFeatureIndices([]);
+        setStep(1);
+    };
+
     // タスクタイプの表示名を返す
     const taskTypeLabel = (t: string) => t === 'classification' ? '分類' : t === 'regression' ? '回帰' : t;
 
@@ -248,16 +316,28 @@ export default function AnalysisConfigPage() {
                                     <CardTitle className="text-base font-semibold truncate pr-2" title={config.name}>
                                         {config.name || `設定 #${config.id}`}
                                     </CardTitle>
-                                    {/* 削除ボタン */}
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                                        onClick={() => handleDeleteClick(config)}
-                                        title="この設定を削除"
-                                    >
-                                        <Trash className="w-4 h-4" weight="regular" />
-                                    </Button>
+                                    <div className="flex gap-1 flex-shrink-0">
+                                        {/* 編集ボタン */}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                            onClick={() => handleEditConfig(config)}
+                                            title="この設定を編集"
+                                        >
+                                            <PencilSimple className="w-4 h-4" weight="regular" />
+                                        </Button>
+                                        {/* 削除ボタン */}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                            onClick={() => handleDeleteClick(config)}
+                                            title="この設定を削除"
+                                        >
+                                            <Trash className="w-4 h-4" weight="regular" />
+                                        </Button>
+                                    </div>
                                 </CardHeader>
                                 <CardContent className="space-y-2">
                                     <div className="flex gap-2 flex-wrap">
@@ -283,10 +363,23 @@ export default function AnalysisConfigPage() {
             <Separator className="w-full max-w-4xl" />
 
             {/* ── 分析設定ウィザード ── */}
-            <Card className="w-full max-w-4xl">
+            <Card id="analysis-wizard" className="w-full max-w-4xl">
                 <CardHeader>
-                    <CardTitle>分析設定ウィザード</CardTitle>
-                    <CardDescription>分析のパラメータを設定します。</CardDescription>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>
+                                {editingConfigId ? `設定を編集中: ${configName || `#${editingConfigId}`}` : '分析設定ウィザード'}
+                            </CardTitle>
+                            <CardDescription>
+                                {editingConfigId ? '設定を変更して保存すると、次回の学習に反映されます。' : '分析のパラメータを設定します。'}
+                            </CardDescription>
+                        </div>
+                        {editingConfigId && (
+                            <Button variant="outline" size="sm" onClick={handleCancelEdit}>
+                                編集をキャンセル
+                            </Button>
+                        )}
+                    </div>
 
                     {/* ── ステップインジケーター（視覚的強化版） ── */}
                     <div className="flex items-center mt-6">
@@ -678,7 +771,7 @@ export default function AnalysisConfigPage() {
                     })() : (
                         <Button onClick={handleSave} className="bg-primary hover:opacity-90 text-primary-foreground">
                             <FloppyDisk className="w-4 h-4 mr-2" weight="regular" />
-                            設定を保存して完了
+                            {editingConfigId ? '設定を更新して完了' : '設定を保存して完了'}
                         </Button>
                     )}
                 </CardFooter>

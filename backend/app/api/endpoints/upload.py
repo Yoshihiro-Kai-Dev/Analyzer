@@ -69,7 +69,7 @@ def process_upload_task(task_id: str, project_id: int, file_path: str, original_
                 "name": col,
                 "pandas_dtype": dtype,
                 "inferred_type": col_type,
-                "sample_values": preview_df[col].head(3).tolist()
+                "sample_values": [None if pd.isna(v) else v for v in preview_df[col].head(3).tolist()]
             })
 
         # 3. 全行数カウント（進捗計算用）
