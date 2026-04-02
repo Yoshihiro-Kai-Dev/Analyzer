@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Play, CircleNotch, Question, GitBranch, ListBullets, Table, Sparkle } from '@phosphor-icons/react';
+import { Play, CircleNotch, Question, GitBranch, ListBullets, Table, Stethoscope } from '@phosphor-icons/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import ReactFlow, {
@@ -527,16 +527,19 @@ export default function DashboardPage() {
             {result && (
                 <div ref={resultRef} className="space-y-10">
 
-                    {/* AI アナリティクス・インサイト */}
+                    {/* モデル診断レポート */}
                     {result.ai_analysis_text && (
                         <section className="border-l-4 border-amber-400 pl-5 py-1">
-                            <div className="flex items-center gap-1.5 mb-3">
-                                <Sparkle className="w-4 h-4 text-amber-500" weight="fill" />
-                                <h2 className="text-sm font-medium text-zinc-700">AI アナリティクス・インサイト</h2>
-                            </div>
-                            <div className="prose prose-sm max-w-none text-zinc-600 leading-relaxed">
-                                <ReactMarkdown>{stripTablePrefix(result.ai_analysis_text)}</ReactMarkdown>
-                            </div>
+                            <details>
+                                <summary className="flex items-center gap-1.5 cursor-pointer list-none [&::-webkit-details-marker]:hidden py-2">
+                                    <Stethoscope className="w-4 h-4 text-amber-500" weight="fill" />
+                                    <h2 className="text-sm font-medium text-zinc-700">モデル診断レポート</h2>
+                                    <span className="text-xs text-zinc-400 ml-1">（クリックで展開）</span>
+                                </summary>
+                                <div className="prose prose-sm max-w-none text-zinc-600 leading-relaxed mt-3">
+                                    <ReactMarkdown>{stripTablePrefix(result.ai_analysis_text)}</ReactMarkdown>
+                                </div>
+                            </details>
                         </section>
                     )}
 
