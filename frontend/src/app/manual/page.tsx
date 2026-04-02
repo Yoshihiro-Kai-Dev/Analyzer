@@ -7,8 +7,8 @@ import {
   BookOpen, CheckCircle, Warning, Lightbulb, Info, Question,
   ArrowRight, Table, ChartBar as ChartBarIcon, ArrowLeft,
   NumberCircleOne, NumberCircleTwo, NumberCircleThree,
-  NumberCircleFour, NumberCircleFive,
-  GitBranch, ListBullets,
+  NumberCircleFour, NumberCircleFive, NumberCircleSix,
+  GitBranch, ListBullets, Stethoscope,
 } from "@phosphor-icons/react"
 
 // ────────────────────────────────────────────────────────────
@@ -487,6 +487,33 @@ export default function ManualPage() {
             <Callout type="tip">
               <strong>並び順：</strong>分類タスクは確信度の高い順、回帰タスクは安定度の高い（ばらつきが小さい）順で表示されます。
               確信度90%以上のルールを探して、その条件を業務ルールとして検証するといった活用ができます。
+            </Callout>
+
+            <SectionTitle><NumberCircleSix className="w-4 h-4 text-emerald-600" weight="fill" />モデル診断レポート</SectionTitle>
+            <div className="flex items-center gap-2 mb-3">
+              <Stethoscope className="w-4 h-4 text-amber-500 shrink-0" weight="fill" />
+              <p className="text-sm font-semibold text-foreground">モデル診断レポート</p>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              学習結果に対して自動的に診断を行い、モデルの健全性や改善ポイントをわかりやすく表示します。
+              「<strong className="text-foreground">モデル診断レポート</strong>」をクリックすると展開されます。
+            </p>
+            <NiceTable
+              headers={["診断項目", "内容", "表示例"]}
+              rows={[
+                ["モデル精度",         "R²やAccuracyの値から精度の良し悪しを判定",         "✅ 良好 / ⚠ 改善余地あり / 🔴 要改善"],
+                ["過学習チェック",     "学習データとテストデータの精度差から過学習を検出",   "学習 R²: 0.95 → テスト R²: 0.72 → ⚠ 警告"],
+                ["クラス不均衡チェック", "PrecisionとRecallの偏りからデータの偏りを検出（分類のみ）", "Precision: 0.87, Recall: 0.68 → ⚠ 警告"],
+                ["特徴量の支配度",     "1つの特徴量に偏りすぎていないかチェック",           "「年収」が重要度の62%を占めている → ⚠ 警告"],
+                ["低寄与の特徴量",     "ほとんど影響のない特徴量をリストアップ",            "顧客ID（重要度: 0.00%）→ 除外を推奨"],
+                ["改善のヒント",       "上記の診断結果に基づいた具体的なアクション提案",     "低寄与の特徴量を除外して再学習してみてください"],
+              ]}
+            />
+            <Callout type="tip">
+              各診断項目には初学者向けの解説が引用ブロック（灰色の枠）で表示されます。指標の意味がわからない場合はそちらを参照してください。
+            </Callout>
+            <Callout type="info">
+              診断は学習結果の統計情報に基づくルールベースの判定です。「⚠ 警告」が出ても必ずしも問題とは限りません。「改善のヒント」を参考に、Step 3で特徴量を調整して再学習を試してみてください。
             </Callout>
           </section>
 
