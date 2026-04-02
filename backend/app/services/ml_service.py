@@ -549,14 +549,6 @@ class MLService:
                                      train_metrics: dict, fi_list: list,
                                      model_type: str = "gradient_boosting") -> str:
         """
-        ルールベースのモデル診断レポートを生成する（スタブ）。
-        """
-        return ""
-
-    def _PLACEHOLDER_generate_diagnostic_report_FULL(self, task_type: str, metrics: dict,
-                                     train_metrics: dict, fi_list: list,
-                                     model_type: str = "gradient_boosting") -> str:
-        """
         ルールベースのモデル診断レポートを生成する。
         各診断項目は「判定 → 根拠 → 初学者向け解説 → 対策」の構造で出力する。
         """
