@@ -210,7 +210,10 @@ export default function DataPage() {
                     </div>
 
                     {loadingTables ? (
-                        <p className="text-muted-foreground text-sm">テーブルを読み込んでいます...</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                            <CircleNotch className="w-4 h-4 animate-spin" weight="bold" />
+                            テーブルを読み込んでいます...
+                        </div>
                     ) : tables.length === 0 ? (
                         <div className="border border-dashed border-border rounded-lg p-8 text-center text-muted-foreground text-sm">
                             アップロード済みのテーブルがありません。<br />
@@ -436,7 +439,10 @@ export default function DataPage() {
                     </DialogHeader>
                     <div className="min-h-[200px]">
                         {colStatsLoading ? (
-                            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">読み込み中...</div>
+                            <div className="flex items-center justify-center h-48 gap-2 text-muted-foreground text-sm">
+                                <CircleNotch className="w-4 h-4 animate-spin" weight="bold" />
+                                読み込み中...
+                            </div>
                         ) : colStats?.error ? (
                             <div className="flex items-center justify-center h-48 text-destructive text-sm">統計情報の取得に失敗しました</div>
                         ) : colStats?.type === 'numeric' ? (

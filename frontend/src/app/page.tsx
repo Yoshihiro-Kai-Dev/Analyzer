@@ -28,6 +28,7 @@ interface Project {
     name: string;
     description: string;
     created_at: string;
+    my_role?: string;  // owner / editor / viewer
 }
 
 // ログインユーザーの情報
@@ -37,8 +38,13 @@ interface AuthUser {
 }
 
 // 相対時刻を返すユーティリティ（例: "2日前"）
+// DockerコンテナはUTCで動作するため、タイムゾーンなしの日時はUTCとして解釈する
 function relativeTime(dateStr: string): string {
-    const diff = Date.now() - new Date(dateStr).getTime()
+    // タイムゾーン情報がない場合はUTC（Z）として解釈
+    const parsed = dateStr.includes('Z') || dateStr.includes('+')
+        ? new Date(dateStr)
+        : new Date(dateStr + 'Z')
+    const diff = Date.now() - parsed.getTime()
     const minutes = Math.floor(diff / 60000)
     const hours = Math.floor(minutes / 60)
     const days = Math.floor(hours / 24)
@@ -46,7 +52,7 @@ function relativeTime(dateStr: string): string {
     if (minutes < 60) return `${minutes}分前`
     if (hours < 24) return `${hours}時間前`
     if (days < 30) return `${days}日前`
-    return new Date(dateStr).toLocaleDateString('ja-JP')
+    return parsed.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
 }
 
 export default function PortalPage() {
@@ -441,7 +447,8 @@ export default function PortalPage() {
                                             </span>
                                         </CardFooter>
 
-                                        {/* ─ 右上アクションボタン ─ */}
+                                        {/* ─ 右上アクションボタン（オーナーのみ表示） ─ */}
+                                        {project.my_role === 'owner' && (
                                         <div className="absolute top-3.5 right-3.5 flex items-center gap-1">
                                             {/* 共有ボタン */}
                                             <button
@@ -460,6 +467,7 @@ export default function PortalPage() {
                                                 <Trash className="w-4 h-4" />
                                             </button>
                                         </div>
+                                        )}
                                     </Card>
                                 </Link>
                             ))}

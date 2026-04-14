@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle, CaretRight, Warning, FloppyDisk, Trash, CircleNotch, PencilSimple } from '@phosphor-icons/react';
+import { CheckCircle, CaretRight, Warning, FloppyDisk, Trash, CircleNotch, PencilSimple, Copy } from '@phosphor-icons/react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import {
@@ -68,6 +68,38 @@ export default function AnalysisConfigPage() {
 
     // 編集モード: 既存設定を編集中の場合にその設定IDを保持する
     const [editingConfigId, setEditingConfigId] = useState<number | null>(null);
+
+    // ── ドラフト保存: ウィザードの入力状態をsessionStorageに保持する ──
+    const draftKey = `analysis-draft-${projectId}`;
+
+    // ウィザード状態が変わるたびにドラフト保存
+    useEffect(() => {
+        // 編集モード中はドラフト保存しない
+        if (editingConfigId) return;
+        // ウィザードが初期状態のときは保存しない
+        if (!configName && !mainTableId && !targetColumnId && step === 1) return;
+        const draft = { step, configName, mainTableId, targetColumnId, taskType, modelType, selectedFeatureIndices };
+        sessionStorage.setItem(draftKey, JSON.stringify(draft));
+    }, [step, configName, mainTableId, targetColumnId, taskType, modelType, selectedFeatureIndices, editingConfigId]);
+
+    // 初回マウント時にドラフトを復元する
+    useEffect(() => {
+        try {
+            const saved = sessionStorage.getItem(draftKey);
+            if (!saved) return;
+            const draft = JSON.parse(saved);
+            if (draft.configName) setConfigName(draft.configName);
+            if (draft.mainTableId) setMainTableId(draft.mainTableId);
+            if (draft.targetColumnId) setTargetColumnId(draft.targetColumnId);
+            if (draft.taskType) setTaskType(draft.taskType);
+            if (draft.modelType) setModelType(draft.modelType);
+            if (draft.selectedFeatureIndices) setSelectedFeatureIndices(draft.selectedFeatureIndices);
+            if (draft.step) setStep(draft.step);
+        } catch { /* 復元失敗は無視 */ }
+    }, []);
+
+    // ドラフトをクリアするヘルパー
+    const clearDraft = () => sessionStorage.removeItem(draftKey);
 
     // 既存の分析設定一覧を取得する関数
     const fetchConfigs = async () => {
@@ -169,6 +201,7 @@ export default function AnalysisConfigPage() {
                 savedId = response.data.id;
             }
             localStorage.setItem('lastAnalysisConfigId', savedId.toString());
+            clearDraft();
             // 保存成功後はダッシュボードへ遷移する
             router.push(`/projects/${projectId}/dashboard`);
 
@@ -271,6 +304,41 @@ export default function AnalysisConfigPage() {
         }, 100);
     };
 
+    // 既存設定をコピーして新規作成ウィザードを開く
+    const handleCopyConfig = async (config: any) => {
+        setEditingConfigId(null); // 新規作成として扱う
+        setConfigName(`${config.name || "設定"} (コピー)`);
+        setMainTableId(config.main_table_id?.toString() || "");
+        setTargetColumnId(config.target_column_id?.toString() || "");
+        setTaskType(config.task_type || "regression");
+        setModelType(config.model_type || "gradient_boosting");
+        setValidationError(null);
+
+        // 特徴量提案を再取得し、保存済みの選択状態を復元する
+        try {
+            const res = await apiClient.get(
+                `/api/projects/${projectId}/analysis/suggest_features?main_table_id=${config.main_table_id}&target_column_id=${config.target_column_id}`
+            );
+            setSuggestions(res.data);
+            const savedDetails: any[] = config.feature_settings?.details || [];
+            const savedKeys = new Set(
+                savedDetails.map((d: any) => `${d.suggestion_type}:${d.column_name}`)
+            );
+            const restoredIndices = res.data
+                .map((s: any, idx: number) => savedKeys.has(`${s.suggestion_type}:${s.column_name}`) ? idx : -1)
+                .filter((i: number) => i >= 0);
+            setSelectedFeatureIndices(restoredIndices);
+        } catch {
+            setSuggestions([]);
+            setSelectedFeatureIndices([]);
+        }
+
+        setStep(3);
+        setTimeout(() => {
+            document.getElementById('analysis-wizard')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    };
+
     // 新規作成モードに切り替え（編集をキャンセル）
     const handleCancelEdit = () => {
         setEditingConfigId(null);
@@ -282,6 +350,7 @@ export default function AnalysisConfigPage() {
         setSuggestions([]);
         setSelectedFeatureIndices([]);
         setStep(1);
+        clearDraft();
     };
 
     // タスクタイプの表示名を返す
@@ -303,7 +372,10 @@ export default function AnalysisConfigPage() {
                 </div>
 
                 {loadingConfigs ? (
-                    <p className="text-sm text-muted-foreground">設定を読み込んでいます...</p>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                        <CircleNotch className="w-4 h-4 animate-spin" weight="bold" />
+                        設定を読み込んでいます...
+                    </div>
                 ) : configs.length === 0 ? (
                     <div className="border border-dashed border-border rounded-lg p-6 text-center text-muted-foreground text-sm">
                         保存済みの分析設定がありません。下のウィザードで設定を作成してください。
@@ -326,6 +398,16 @@ export default function AnalysisConfigPage() {
                                             title="この設定を編集"
                                         >
                                             <PencilSimple className="w-4 h-4" weight="regular" />
+                                        </Button>
+                                        {/* コピーボタン */}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                            onClick={() => handleCopyConfig(config)}
+                                            title="この設定をコピーして新規作成"
+                                        >
+                                            <Copy className="w-4 h-4" weight="regular" />
                                         </Button>
                                         {/* 削除ボタン */}
                                         <Button
@@ -350,7 +432,7 @@ export default function AnalysisConfigPage() {
                                     </div>
                                     {config.created_at && (
                                         <p className="text-xs text-muted-foreground">
-                                            作成日: {new Date(config.created_at).toLocaleDateString('ja-JP')}
+                                            作成日: {new Date(config.created_at.includes('Z') || config.created_at.includes('+') ? config.created_at : config.created_at + 'Z').toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}
                                         </p>
                                     )}
                                 </CardContent>

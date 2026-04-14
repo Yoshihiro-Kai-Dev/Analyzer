@@ -70,7 +70,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 
 
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowRight } from '@phosphor-icons/react';
+import { ArrowRight, CircleNotch } from '@phosphor-icons/react';
 import { apiClient } from '@/lib/api'
 
 export default function RelationsPage() {
@@ -295,10 +295,10 @@ export default function RelationsPage() {
 
             <div className="flex-1 bg-background relative">
                 {loading ? (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="animate-spin text-2xl">⏳</span>
-                            <span>データを読み込んでいます...</span>
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                        <div className="flex flex-col items-center gap-3">
+                            <CircleNotch className="w-6 h-6 animate-spin" weight="bold" />
+                            <span className="text-sm">データを読み込んでいます...</span>
                         </div>
                     </div>
                 ) : (

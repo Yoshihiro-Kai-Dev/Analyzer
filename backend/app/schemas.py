@@ -50,6 +50,7 @@ class ProjectCreate(ProjectBase):
 class Project(ProjectBase):
     id: int
     created_at: datetime
+    my_role: Optional[str] = None  # リクエストユーザーのロール（owner/editor/viewer）
 
     class Config:
         from_attributes = True

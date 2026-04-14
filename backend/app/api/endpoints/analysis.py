@@ -4,19 +4,28 @@ from typing import List, Dict, Any
 from app.db.session import get_db
 from app.db import models
 from app import schemas
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_project_member, require_editor
 
 router = APIRouter()
 
 @router.get("/configs", response_model=List[schemas.AnalysisConfig])
-def list_configs(project_id: int, db: Session = Depends(get_db)):
+def list_configs(
+    project_id: int,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
     """
-    プロジェクトの分析設定一覧を取得する
+    プロジェクトの分析設定一覧を取得する（メンバーのみ）
     """
     return db.query(models.AnalysisConfig).filter(models.AnalysisConfig.project_id == project_id).all()
 
 @router.post("/config", response_model=schemas.AnalysisConfig)
-def create_config(project_id: int, config: schemas.AnalysisConfigCreate, db: Session = Depends(get_db)):
+def create_config(
+    project_id: int,
+    config: schemas.AnalysisConfigCreate,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(require_editor),
+):
     """
     分析設定を保存する
     """
@@ -56,7 +65,7 @@ def update_config(
     config_id: int,
     config: schemas.AnalysisConfigCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     分析設定を更新する
@@ -104,7 +113,7 @@ def delete_config(
     project_id: int,
     config_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     分析設定を削除する
@@ -125,7 +134,13 @@ def delete_config(
 
 
 @router.get("/suggest_features")
-def suggest_features(project_id: int, main_table_id: int, target_column_id: int = None, db: Session = Depends(get_db)):
+def suggest_features(
+    project_id: int,
+    main_table_id: int,
+    target_column_id: int = None,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
     """
     選択されたメインテーブルに基づいて、使用可能な特徴量を提案する。
     メインテーブル自身のカラム（目的変数を除く）と、

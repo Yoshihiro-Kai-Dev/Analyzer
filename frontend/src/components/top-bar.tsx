@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { CaretRight, House, Bell, BookOpen } from '@phosphor-icons/react';
 import { getNotifications, markAllRead, getUnreadCount } from '@/lib/notifications';
 import type { Notification } from '@/lib/notifications';
@@ -18,6 +18,7 @@ const sectionMeta: Record<string, { name: string; step: number }> = {
 
 export function TopBar({ projectId }: { projectId: string }) {
     const pathname = usePathname();
+    const router = useRouter();
     // パスの末尾からセクション名を取得する
     const section = pathname.split('/').pop() ?? '';
     const meta = sectionMeta[section];
@@ -128,14 +129,27 @@ export function TopBar({ projectId }: { projectId: string }) {
                             {notifications.length === 0 ? (
                                 <p className="text-xs text-muted-foreground text-center py-6">通知はありません</p>
                             ) : (
-                                notifications.map(n => (
-                                    <div key={n.id} className="px-3 py-2 border-b border-border last:border-0 hover:bg-muted/30">
-                                        <p className="text-xs text-foreground">{n.message}</p>
-                                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                                            {new Date(n.createdAt).toLocaleString('ja-JP')}
-                                        </p>
-                                    </div>
-                                ))
+                                notifications.map(n => {
+                                    // 通知タイプに応じた遷移先
+                                    const navTarget: Record<string, string> = {
+                                        train: `/projects/${projectId}/dashboard`,
+                                        predict: `/projects/${projectId}/predict`,
+                                        upload: `/projects/${projectId}/data`,
+                                    };
+                                    const href = navTarget[n.type];
+                                    return (
+                                        <div
+                                            key={n.id}
+                                            className="px-3 py-2 border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer"
+                                            onClick={() => { if (href) { router.push(href); setOpen(false); } }}
+                                        >
+                                            <p className="text-xs text-foreground">{n.message}</p>
+                                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                                                {new Date(n.createdAt).toLocaleString('ja-JP')}
+                                            </p>
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     </div>

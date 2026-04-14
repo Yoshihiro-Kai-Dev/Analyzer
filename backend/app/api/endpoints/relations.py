@@ -5,7 +5,7 @@ from typing import List, Set
 from app.db.session import get_db
 from app.db import models
 from app import schemas
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_project_member, require_editor
 
 router = APIRouter()
 
@@ -57,7 +57,12 @@ def check_cycle(db: Session, new_parent_id: int, new_child_id: int) -> bool:
     return False
 
 @router.post("/", response_model=schemas.Relation)
-def create_relation(project_id: int, relation: schemas.RelationCreate, db: Session = Depends(get_db)):
+def create_relation(
+    project_id: int,
+    relation: schemas.RelationCreate,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(require_editor),
+):
     """
     新しいリレーションを作成する。
     N:Mの禁止、循環参照のチェックを行う。
@@ -126,16 +131,24 @@ def delete_relation(
     project_id: int,
     relation_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     リレーション定義を削除する
+    リレーションがプロジェクトに属するか（親テーブル経由で）確認する
     """
     # 削除対象リレーションの取得
     relation = db.query(models.RelationDefinition).filter(
         models.RelationDefinition.id == relation_id
     ).first()
     if not relation:
+        raise HTTPException(status_code=404, detail="リレーションが見つかりません")
+
+    # リレーションの親テーブルがプロジェクトに属するか確認する（IDOR防止）
+    parent_table = db.query(models.TableMetadata).filter(
+        models.TableMetadata.id == relation.parent_table_id
+    ).first()
+    if not parent_table or parent_table.project_id != project_id:
         raise HTTPException(status_code=404, detail="リレーションが見つかりません")
 
     # DBからリレーションを削除してコミット
@@ -145,7 +158,13 @@ def delete_relation(
 
 
 @router.get("/")
-def read_relations(project_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_relations(
+    project_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
     """
     リレーション定義の一覧を取得する
     各リレーションにテーブル結合のマッチ率（%）を付加して返す

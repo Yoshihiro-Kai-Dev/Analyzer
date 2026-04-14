@@ -371,3 +371,12 @@ a[href] {
   from { width: 30%; margin-left: 0; }
   to   { width: 50%; margin-left: 50%; }
 }
+
+/* ReactFlowのエッジをクリック可能に見せる */
+.react-flow__edge {
+  cursor: pointer;
+}
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3;
+  stroke: var(--primary, #6366f1);
+}

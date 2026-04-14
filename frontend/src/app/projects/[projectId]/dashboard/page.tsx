@@ -228,6 +228,10 @@ export default function DashboardPage() {
     const [loadingPastJobs, setLoadingPastJobs] = useState(false);
     // 過去ジョブから選択した jobId（nullのとき最新結果を表示）
     const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+    // 比較表示用: jobId → メトリクス
+    const [pastJobMetrics, setPastJobMetrics] = useState<Record<number, any>>({});
+    // 比較モードの開閉
+    const [showComparison, setShowComparison] = useState(false);
 
     // 決定木 ReactFlow state
     const [dtNodes, setDtNodes, onDtNodesChange] = useNodesState([]);
@@ -272,6 +276,19 @@ export default function DashboardPage() {
                 .filter(j => j.status === 'completed')
                 .sort((a, b) => (b.id ?? 0) - (a.id ?? 0));
             setPastJobs(completed);
+
+            // 比較用: 各ジョブのメトリクスを並列取得（最大10件）
+            const jobsToFetch = completed.slice(0, 10);
+            const metricsMap: Record<number, any> = {};
+            await Promise.all(
+                jobsToFetch.map(async (j) => {
+                    try {
+                        const r = await apiClient.get(`/api/projects/${projectId}/train/result/${j.id}`);
+                        metricsMap[j.id] = r.data?.metrics ?? null;
+                    } catch { /* 取得失敗は無視 */ }
+                })
+            );
+            setPastJobMetrics(metricsMap);
         } catch {
             setPastJobs([]);
         } finally {
@@ -321,8 +338,17 @@ export default function DashboardPage() {
 
     const startPolling = (jobId: number) => {
         if (pollingRef.current) clearInterval(pollingRef.current);
+        // 最大30分（1秒間隔 × 1800回）でタイムアウト
+        let pollCount = 0;
+        const MAX_POLL = 1800;
 
         pollingRef.current = setInterval(async () => {
+            pollCount++;
+            if (pollCount > MAX_POLL) {
+                clearInterval(pollingRef.current!);
+                setPollingError("学習が30分以上応答していないため、ポーリングを停止しました。ページを再読み込みしてステータスを確認してください。");
+                return;
+            }
             try {
                 const res = await apiClient.get(`/api/projects/${projectId}/train/status/${jobId}`);
                 setJob(res.data);
@@ -497,7 +523,8 @@ export default function DashboardPage() {
                                         Job #{j.id}
                                         {j.created_at && (
                                             <span className={`text-xs ${isSelected ? 'text-amber-700' : 'text-zinc-400'}`}>
-                                                {new Date(j.created_at).toLocaleString('ja-JP', {
+                                                {new Date(j.created_at && (j.created_at.includes('Z') || j.created_at.includes('+')) ? j.created_at : (j.created_at + 'Z')).toLocaleString('ja-JP', {
+                                                    timeZone: 'Asia/Tokyo',
                                                     month: '2-digit', day: '2-digit',
                                                     hour: '2-digit', minute: '2-digit',
                                                 })}
@@ -508,6 +535,75 @@ export default function DashboardPage() {
                             })}
                         </div>
                     )}
+                    {/* 比較ボタン */}
+                    {pastJobs.length >= 2 && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3"
+                            onClick={() => setShowComparison(!showComparison)}
+                        >
+                            {showComparison ? '比較を閉じる' : `${pastJobs.length}件の結果を比較`}
+                        </Button>
+                    )}
+
+                    {/* 比較テーブル */}
+                    {showComparison && pastJobs.length >= 2 && (
+                        <div className="mt-3 overflow-x-auto">
+                            <table className="w-full text-xs border-collapse">
+                                <thead>
+                                    <tr className="border-b border-zinc-200">
+                                        <th className="text-left py-2 px-3 text-zinc-500 font-medium">Job</th>
+                                        <th className="text-left py-2 px-3 text-zinc-500 font-medium">日時</th>
+                                        {pastJobMetrics[pastJobs[0]?.id]?.r2 != null && (
+                                            <th className="text-right py-2 px-3 text-zinc-500 font-medium">R²</th>
+                                        )}
+                                        {pastJobMetrics[pastJobs[0]?.id]?.rmse != null && (
+                                            <th className="text-right py-2 px-3 text-zinc-500 font-medium">RMSE</th>
+                                        )}
+                                        {pastJobMetrics[pastJobs[0]?.id]?.accuracy != null && (
+                                            <th className="text-right py-2 px-3 text-zinc-500 font-medium">Accuracy</th>
+                                        )}
+                                        {pastJobMetrics[pastJobs[0]?.id]?.auc != null && (
+                                            <th className="text-right py-2 px-3 text-zinc-500 font-medium">AUC</th>
+                                        )}
+                                        {pastJobMetrics[pastJobs[0]?.id]?.precision != null && (
+                                            <th className="text-right py-2 px-3 text-zinc-500 font-medium">Precision</th>
+                                        )}
+                                        {pastJobMetrics[pastJobs[0]?.id]?.recall != null && (
+                                            <th className="text-right py-2 px-3 text-zinc-500 font-medium">Recall</th>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pastJobs.slice(0, 10).map((j, idx) => {
+                                        const m = pastJobMetrics[j.id];
+                                        const isBest = idx === 0; // 最新ジョブ
+                                        return (
+                                            <tr
+                                                key={j.id}
+                                                className={`border-b border-zinc-100 cursor-pointer hover:bg-zinc-50 ${isBest ? 'bg-amber-50/50' : ''}`}
+                                                onClick={() => handleSelectPastJob(j.id)}
+                                            >
+                                                <td className="py-2 px-3 font-mono">#{j.id}</td>
+                                                <td className="py-2 px-3 text-zinc-400">
+                                                    {j.created_at && new Date(j.created_at.includes('Z') || j.created_at.includes('+') ? j.created_at : j.created_at + 'Z').toLocaleString('ja-JP', {
+                                                        timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+                                                    })}
+                                                </td>
+                                                {m?.r2 != null && <td className="py-2 px-3 text-right font-mono">{m.r2.toFixed(4)}</td>}
+                                                {m?.rmse != null && <td className="py-2 px-3 text-right font-mono">{m.rmse.toFixed(2)}</td>}
+                                                {m?.accuracy != null && <td className="py-2 px-3 text-right font-mono">{(m.accuracy * 100).toFixed(1)}%</td>}
+                                                {m?.auc != null && <td className="py-2 px-3 text-right font-mono">{m.auc.toFixed(4)}</td>}
+                                                {m?.precision != null && <td className="py-2 px-3 text-right font-mono">{m.precision.toFixed(4)}</td>}
+                                                {m?.recall != null && <td className="py-2 px-3 text-right font-mono">{m.recall.toFixed(4)}</td>}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </section>
             )}
 
@@ -516,6 +612,7 @@ export default function DashboardPage() {
                 <JobStatusCard
                     status={job.status as JobStatus}
                     message={job.error_message ?? job.message ?? null}
+                    progress={job.progress ?? null}
                     metricsLabel={job.status === "completed" ? buildMetricsLabel(result) : null}
                     onCancel={job.status === "running" || job.status === "pending" ? cancelTraining : undefined}
                     onRetry={job.status === "failed" ? () => startTraining() : undefined}

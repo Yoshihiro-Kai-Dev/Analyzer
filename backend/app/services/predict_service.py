@@ -34,13 +34,14 @@ def _preprocess_for_prediction(
     df: pd.DataFrame,
     target_col_name: str | None,
     expected_features: list[str],
+    encoders: dict | None = None,
 ) -> pd.DataFrame:
     """
     学習時（ml_service._preprocess_data）と同じ前処理を適用し、
     モデルが期待する特徴量列を揃えて返す。
     - ターゲット列を除外
     - IDっぽいカラムを除外
-    - カテゴリ変数をLabelEncoding
+    - カテゴリ変数を学習時のLabelEncoderで変換（未知ラベルは-1に割り当て）
     - 欠損を0埋め
     - expected_featuresと完全一致を検証（不足があればエラー）
     """
@@ -55,7 +56,17 @@ def _preprocess_for_prediction(
     row_count = len(X)
     for col in X.columns:
         col_lower = col.lower()
-        if any(x in col_lower for x in ["id", "no.", "code", "date", "time", "名", "日"]):
+        # "humidity" 等の誤マッチを防ぐため、"id" は完全一致・サフィックス・プレフィックスで判定する
+        is_id_like = (
+            col_lower == "id"
+            or col_lower.endswith("_id") or col_lower.endswith("id")
+            or col_lower.startswith("id_") or col_lower.startswith("id ")
+        )
+        is_excluded = (
+            is_id_like
+            or any(x in col_lower for x in ["no.", "code", "date", "time", "名", "日"])
+        )
+        if is_excluded:
             drop_cols.append(col)
             continue
         if X[col].dtype == "object" or str(X[col].dtype) == "category":
@@ -65,11 +76,23 @@ def _preprocess_for_prediction(
     if drop_cols:
         X = X.drop(columns=drop_cols)
 
-    # カテゴリ変数をLabelEncoding
+    # カテゴリ変数をLabelEncoding（学習時のエンコーダを使用）
     for col in X.select_dtypes(include=["object", "category"]).columns:
-        le = LabelEncoder()
         X[col] = X[col].astype(str).fillna("missing")
-        X[col] = le.fit_transform(X[col])
+        if encoders and col in encoders:
+            # 学習時のエンコーダを再利用（同一マッピングを保証）
+            le = encoders[col]
+            # 学習時に未知のラベルは -1 に割り当てる
+            known_classes = set(le.classes_)
+            X[col] = X[col].map(
+                lambda v, _kc=known_classes, _le=le: (
+                    _le.transform([v])[0] if v in _kc else -1
+                )
+            )
+        else:
+            # エンコーダがない場合はフォールバック（後方互換性のため）
+            le = LabelEncoder()
+            X[col] = le.fit_transform(X[col])
 
     # 数値型の欠損を0埋め
     X = X.fillna(0)
@@ -150,10 +173,12 @@ def run_prediction(job_id: str, config_id: int, train_job_id: int, file_bytes: b
         sk_model = None
         scaler = None
         lgb_model = None
+        encoders = None  # 学習時のLabelEncoderマッピング
         if model_ext == ".pkl":
             saved = joblib.load(model_path)
             sk_model = saved["model"]
             scaler = saved.get("scaler")
+            encoders = saved.get("encoders")  # 学習時のエンコーダを復元
             if scaler is not None and hasattr(scaler, "feature_names_in_"):
                 # スケーラーが学習時の列順序を保持している
                 expected_features = scaler.feature_names_in_.tolist()
@@ -163,6 +188,14 @@ def run_prediction(job_id: str, config_id: int, train_job_id: int, file_bytes: b
             import lightgbm as lgb
             lgb_model = lgb.Booster(model_file=model_path)
             expected_features = lgb_model.feature_name() if hasattr(lgb_model, "feature_name") else fi_features
+            # LightGBMモデルのエンコーダは別ファイルに保存されている
+            encoder_path = model_path.replace(".txt", "").replace("model_", "encoders_") + ".pkl"
+            # パスを正規化（model_{job_id}.txt → encoders_{job_id}.pkl）
+            import re
+            encoder_path = re.sub(r'model_(\d+)\.txt$', r'encoders_\1.pkl', model_path)
+            if os.path.exists(encoder_path):
+                saved_enc = joblib.load(encoder_path)
+                encoders = saved_enc.get("encoders")
 
         # 元のIDカラムを特定する（結果CSVの先頭に付加するため先に保存）
         # 優先順位1: 分析設定のメインテーブルで inferred_type='id' のカラムを使う
@@ -187,7 +220,8 @@ def run_prediction(job_id: str, config_id: int, train_job_id: int, file_bytes: b
 
         # 学習時と同じ前処理を適用（期待する特徴量列に揃える）
         # DB結合は行わず、アップロードCSVの列を直接使用する
-        X = _preprocess_for_prediction(main_df, target_col_name, expected_features)
+        # 学習時のLabelEncoderを再利用して同一マッピングを保証する
+        X = _preprocess_for_prediction(main_df, target_col_name, expected_features, encoders)
 
         # モデルで予測（モデルは上で先行ロード済み）
         if sk_model is not None:

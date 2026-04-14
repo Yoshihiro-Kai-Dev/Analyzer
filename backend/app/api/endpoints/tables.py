@@ -4,14 +4,20 @@ from typing import List
 from app.db.session import get_db
 from app.db import models
 from app import schemas
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_project_member, require_editor
 import sqlalchemy
 import re
 
 router = APIRouter()
 
 @router.get("/", response_model=List[schemas.Table])
-def read_tables(project_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_tables(
+    project_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
     """
     登録されているテーブル一覧を取得する（カラム情報含む）
     """
@@ -23,7 +29,7 @@ def delete_table(
     project_id: int,
     table_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     テーブルメタデータと物理テーブルを削除する
@@ -59,7 +65,7 @@ def update_column(
     column_id: int,
     update: schemas.ColumnUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     カラムの推論型・値ラベルを更新する
@@ -86,7 +92,7 @@ def get_column_stats(
     table_id: int,
     column_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(get_project_member),
 ):
     """
     カラムの統計情報・分布データを取得する
@@ -195,7 +201,7 @@ def copy_table(
     project_id: int,
     table_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     テーブルをコピーする（同プロジェクト内に新テーブルとして複製）
@@ -250,7 +256,7 @@ def get_label_suggestions(
     table_id: int,
     min_overlap_rate: int = Query(default=30, ge=0, le=100),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(get_project_member),
 ):
     """
     新規テーブルのカテゴリ列に対し、同プロジェクト内の既存 value_labels 定義を候補として返す。

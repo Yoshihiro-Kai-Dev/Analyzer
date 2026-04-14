@@ -9,6 +9,8 @@ export type JobStatus = "pending" | "running" | "completed" | "failed"
 interface JobStatusCardProps {
   status: JobStatus
   message?: string | null
+  /** 0〜100の進捗率（バックエンドのjob.progressに対応） */
+  progress?: number | null
   /** completed時に表示するメトリクス（例: "R² = 0.847  |  RMSE = 12.4"） */
   metricsLabel?: string | null
   onCancel?: () => void
@@ -20,6 +22,7 @@ interface JobStatusCardProps {
 export function JobStatusCard({
   status,
   message,
+  progress,
   metricsLabel,
   onCancel,
   onRetry,
@@ -46,10 +49,20 @@ export function JobStatusCard({
             </Button>
           )}
         </div>
-        {/* インジケーターバー */}
+        {/* プログレスバー */}
         <div className="h-1.5 bg-primary/20 rounded-full overflow-hidden">
-          <div className="h-full bg-primary rounded-full animate-[shimmer_1.5s_ease-in-out_infinite_alternate]" style={{ width: '40%' }} />
+          {progress != null && progress > 0 ? (
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            />
+          ) : (
+            <div className="h-full bg-primary rounded-full animate-[shimmer_1.5s_ease-in-out_infinite_alternate]" style={{ width: '40%' }} />
+          )}
         </div>
+        {progress != null && progress > 0 && (
+          <p className="text-xs text-muted-foreground mt-1.5 text-right tabular-nums">{Math.round(progress)}%</p>
+        )}
       </div>
     )
   }
