@@ -354,6 +354,65 @@ docker compose version
 
 ---
 
+### 9.2.1 社内ネットワーク向け Docker 設定
+
+社内ネットワークと Docker の内部ネットワークが競合しないよう、サブネット・DNS・レジストリミラーを設定します。
+
+#### Windows Server の場合（Docker Desktop）
+
+Docker Desktop の **Settings** から以下を設定します。
+
+1. **Resources → NETWORK** を開き、Docker subnet を `172.31.1.0/24` に変更
+2. **Docker Engine** タブを開き、JSON を以下の内容に置き換え
+
+#### Ubuntu の場合
+
+```bash
+sudo tee /etc/docker/daemon.json << 'EOF'
+{
+  "builder": {
+    "gc": {
+      "defaultKeepStorage": "20GB",
+      "enabled": true
+    }
+  },
+  "default-address-pools": [
+    {
+      "base": "172.31.0.0/24",
+      "size": 28
+    }
+  ],
+  "dns": [
+    "172.18.1.5",
+    "172.17.1.5"
+  ],
+  "experimental": false,
+  "features": {
+    "buildkit": true
+  },
+  "registry-mirrors": [
+    "https://hub.nck.co.jp"
+  ]
+}
+EOF
+
+sudo systemctl restart docker
+```
+
+#### 各設定項目の意味
+
+| 項目 | 説明 |
+|---|---|
+| `default-address-pools` | Docker が作成するネットワークの IP 帯を社内 LAN と競合しない範囲に変更 |
+| `dns` | コンテナ内から社内リソースを名前解決するための社内 DNS サーバー |
+| `registry-mirrors` | Docker Hub の代わりに社内ミラーレジストリからイメージを取得（プロキシ不要） |
+| `builder.gc` | ビルドキャッシュの上限を 20GB に制限 |
+
+> [!IMPORTANT]
+> この設定は Docker インストール直後、コンテナを起動する前に行ってください。DNS やレジストリミラーの値は社内環境に応じて変更してください。
+
+---
+
 ### 9.3 アプリケーションの配置
 
 #### Windows Server の場合
@@ -410,17 +469,22 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 ---
 
-### 9.5 DBeaver 接続用ポートをサーバーでは閉じる
+### 9.5 DBeaver からの DB 接続
 
-`docker-compose.yml` の `postgres` サービスに `ports: "5433:5432"` が設定されている場合、サーバーでは**セキュリティのため削除**することを推奨します。社内サーバー上の DB に外部から直接接続できる状態になるためです。
+`docker-compose.yml` の `postgres` サービスに `ports: "5433:5432"` が設定されているため、DBeaver 等の外部ツールからサーバー上の PostgreSQL に接続できます。
 
-```yaml
-# サーバー運用時はこの行を削除またはコメントアウトする
-# ports:
-#   - "5433:5432"
-```
+DBeaver の接続情報:
 
-DBeaver で接続したい場合はサーバー上で直接 `docker compose exec postgres psql` を使うか、SSH トンネル経由での接続を検討してください。
+| 項目 | 値 |
+|---|---|
+| ホスト | サーバーの IP アドレス |
+| ポート | `5433` |
+| データベース | `.env` の `DB_NAME` の値 |
+| ユーザー | `.env` の `DB_USER` の値 |
+| パスワード | `.env` の `DB_PASSWORD` の値 |
+
+> [!NOTE]
+> 接続するにはファイアウォールでポート 5433 を許可する必要があります（「9.8 ファイアウォールの設定」参照）。
 
 ---
 
@@ -501,18 +565,20 @@ sudo systemctl status analyzer
 
 ### 9.8 ファイアウォールの設定
 
-サーバーのファイアウォールでポート 80 を開放します。
+サーバーのファイアウォールでポート 80（HTTP）と 5433（DBeaver 用 DB 接続）を開放します。
 
 #### Windows Server の場合
 
 ```powershell
 New-NetFirewallRule -DisplayName "分析くん HTTP" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
+New-NetFirewallRule -DisplayName "分析くん PostgreSQL" -Direction Inbound -Protocol TCP -LocalPort 5433 -Action Allow
 ```
 
 #### Ubuntu の場合
 
 ```bash
 sudo ufw allow 80/tcp
+sudo ufw allow 5433/tcp
 sudo ufw reload
 ```
 
