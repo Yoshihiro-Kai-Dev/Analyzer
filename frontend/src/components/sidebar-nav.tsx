@@ -38,10 +38,12 @@ export function SidebarNav({ projectId, completedSteps = new Set() }: SidebarNav
     if (isLocked(step)) {
       if (!completedSteps.has(1)) {
         toast.warning("まずデータを登録してください", {
+          id: "sidebar-lock",  // 同一IDで重複トーストを防止
           description: "Step 1「データ管理」からCSVファイルをアップロードしてください。",
         })
       } else {
         toast.warning("学習が完了していません", {
+          id: "sidebar-lock",
           description: "Step 4「ダッシュボード」でモデルを学習してから予測を実行できます。",
         })
       }

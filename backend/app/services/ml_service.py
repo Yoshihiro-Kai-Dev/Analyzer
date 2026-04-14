@@ -225,9 +225,9 @@ class MLService:
                 total_imp = raw_imp.sum() + 1e-10
                 importance = raw_imp / total_imp * 100
 
-                # モデル保存 (joblib)
+                # モデル保存 (joblib) — エンコーダも含めて保存し予測時に再利用する
                 model_path = os.path.join(MODEL_DIR, f"model_{job_id}.pkl")
-                joblib.dump({'model': sk_model, 'scaler': scaler}, model_path)
+                joblib.dump({'model': sk_model, 'scaler': scaler, 'encoders': encoders}, model_path)
 
                 # ── statsmodels による統計量計算 ──────────────────────────
                 # 大規模データではサンプリングしてからstatsmodelsを実行（OOM防止）
@@ -277,9 +277,12 @@ class MLService:
                 y_pred = sk_model.predict(X_test)
                 importance = sk_model.feature_importances_
 
-                # モデル保存 (LightGBM ネイティブ)
+                # モデル保存 (LightGBM ネイティブ + エンコーダ)
                 model_path = os.path.join(MODEL_DIR, f"model_{job_id}.txt")
                 sk_model.booster_.save_model(model_path)
+                # エンコーダを別ファイルで保存（予測時にカテゴリ変数を同一マッピングで変換するため）
+                encoder_path = os.path.join(MODEL_DIR, f"encoders_{job_id}.pkl")
+                joblib.dump({'encoders': encoders}, encoder_path)
                 X_test_s  = X_test  # スケーリングなし
                 coef_stats = None   # 勾配ブースティングは係数統計量なし
 
@@ -338,7 +341,9 @@ class MLService:
                 metrics['accuracy'] = float(accuracy_score(y_test, y_pred))
                 train_metrics['accuracy'] = float(accuracy_score(y_train, y_train_pred))
                 # Precision / Recall（クラス不均衡検出用）
-                avg = 'binary' if y.nunique() == 2 else 'macro'
+                # y_test のクラス数で average を判定する（split前のyでなく実際の評価データ基準）
+                n_classes_test = y_test.nunique()
+                avg = 'binary' if n_classes_test == 2 else 'macro'
                 try:
                     metrics['precision'] = float(precision_score(y_test, y_pred, average=avg, zero_division=0))
                     metrics['recall']    = float(recall_score(y_test, y_pred, average=avg, zero_division=0))
@@ -613,11 +618,17 @@ class MLService:
             col_lower = col.lower()
             
             # 手動ルール: IDっぽい名前、日付っぽい名前
-            if any(x in col_lower for x in ['id', 'no.', 'code', 'date', 'time', '名', '日']):
-                # 数値型で分散がある程度あるなら残す手もあるが、今回は安全側に倒して「個人ID」などは消す
-                # ただし「実施日」から季節性を取るなどは高度すぎるので一旦消す
-                # "年齢" や "日数" などが含まれるとまずいので、完全一致や特定の接尾辞で判定を強化してもよいが、
-                # 今回はユーザーデータが "個人ID", "健診実施日" なので、それらにマッチするようにする。
+            # "humidity" 等の誤マッチを防ぐため、"id" は完全一致・サフィックス・プレフィックスで判定する
+            is_id_like = (
+                col_lower == 'id'
+                or col_lower.endswith('_id') or col_lower.endswith('id')  # "個人id", "user_id"
+                or col_lower.startswith('id_') or col_lower.startswith('id ')
+            )
+            is_excluded = (
+                is_id_like
+                or any(x in col_lower for x in ['no.', 'code', 'date', 'time', '名', '日'])
+            )
+            if is_excluded:
                 drop_cols.append(col)
                 continue
             

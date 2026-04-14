@@ -72,3 +72,33 @@ def get_project_member(
             detail="このプロジェクトへのアクセス権限がありません",
         )
     return member
+
+
+def require_editor(
+    member: models.ProjectMember = Depends(get_project_member),
+) -> models.ProjectMember:
+    """
+    編集者以上のロール（owner / editor）を要求するFastAPI依存関係
+    閲覧者（viewer）の場合は403エラーを返す
+    """
+    if member.role not in ("owner", "editor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="この操作には編集者以上の権限が必要です",
+        )
+    return member
+
+
+def require_owner(
+    member: models.ProjectMember = Depends(get_project_member),
+) -> models.ProjectMember:
+    """
+    オーナーロールを要求するFastAPI依存関係
+    オーナー以外の場合は403エラーを返す
+    """
+    if member.role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="この操作にはオーナー権限が必要です",
+        )
+    return member

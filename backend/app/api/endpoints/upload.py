@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
 import pandas as pd
 import datetime
 import os
@@ -7,6 +7,7 @@ import shutil
 from app.db.session import engine, SessionLocal
 from app.db import models
 from app.db.models import TableMetadata, ColumnMetadata, UploadTask
+from app.core.deps import require_editor, get_current_user
 
 router = APIRouter()
 
@@ -141,6 +142,7 @@ async def upload_csv(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     categorical_threshold: int = Form(default=20),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     CSVファイルを受け取り、バックグラウンド処理を開始する。
@@ -185,16 +187,36 @@ async def upload_csv(
 
 
 @router.get("/status/{task_id}", summary="アップロードタスク状態確認")
-async def get_task_status(task_id: str):
+async def get_task_status(
+    project_id: int,
+    task_id: str,
+    current_user: models.User = Depends(get_current_user),
+):
     """
     指定されたタスクIDの進捗状況をDBから返す。
-    サーバー再起動後も正しい状態を返す。
+    タスクがリクエストされたプロジェクトに属するか確認する。
     """
     db = SessionLocal()
     try:
         task = db.query(UploadTask).filter(UploadTask.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="タスクが見つかりません。")
+
+        # タスクがリクエストされたプロジェクトに属するか確認する
+        if task.project_id != project_id:
+            raise HTTPException(status_code=404, detail="タスクが見つかりません。")
+
+        # リクエストユーザーがプロジェクトのメンバーか確認する
+        member = (
+            db.query(models.ProjectMember)
+            .filter(
+                models.ProjectMember.project_id == project_id,
+                models.ProjectMember.user_id == current_user.id,
+            )
+            .first()
+        )
+        if member is None:
+            raise HTTPException(status_code=403, detail="このプロジェクトへのアクセス権限がありません")
 
         return {
             "status": task.status,

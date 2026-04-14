@@ -4,12 +4,18 @@ from app.db.session import get_db
 from app.db import models
 from app import schemas
 from app.services.ml_service import MLService
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_project_member, require_editor
 
 router = APIRouter()
 
 @router.post("/run/{config_id}", response_model=schemas.TrainJob)
-def run_training(project_id: int, config_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def run_training(
+    project_id: int,
+    config_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(require_editor),
+):
     """
     指定された設定IDで学習ジョブを開始する
     """
@@ -55,6 +61,7 @@ def list_jobs(
     project_id: int,
     config_id: int | None = None,
     db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(get_project_member),
 ):
     """
     プロジェクト内の学習ジョブ一覧を返す
@@ -71,7 +78,12 @@ def list_jobs(
 
 
 @router.get("/status/{job_id}", response_model=schemas.TrainJob)
-def get_status(project_id: int, job_id: int, db: Session = Depends(get_db)):
+def get_status(
+    project_id: int,
+    job_id: int,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
     job = db.query(models.TrainJob).filter(models.TrainJob.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -85,7 +97,7 @@ def cancel_job(
     project_id: int,
     job_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     学習ジョブをキャンセルする
@@ -115,7 +127,12 @@ def cancel_job(
 
 
 @router.get("/result/{job_id}", response_model=schemas.TrainResult)
-def get_result(project_id: int, job_id: int, db: Session = Depends(get_db)):
+def get_result(
+    project_id: int,
+    job_id: int,
+    db: Session = Depends(get_db),
+    _member: models.ProjectMember = Depends(get_project_member),
+):
     result = db.query(models.TrainResult).filter(models.TrainResult.job_id == job_id).first()
     if not result:
         raise HTTPException(status_code=404, detail="Result not found")

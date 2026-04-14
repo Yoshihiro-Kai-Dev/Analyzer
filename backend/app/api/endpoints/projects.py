@@ -9,7 +9,7 @@ from typing import List
 from app.db.session import get_db
 from app.db import models
 from app import schemas
-from app.core.deps import get_current_user, get_project_member
+from app.core.deps import get_current_user, get_project_member, require_owner
 
 import sqlalchemy
 
@@ -25,20 +25,28 @@ def read_projects(
 ):
     """
     自分がオーナーまたはメンバーであるプロジェクト一覧を取得する
+    各プロジェクトにリクエストユーザーのロール（my_role）を付加して返す
     """
-    # 自分がメンバーとして登録されているプロジェクトIDを取得
-    member_project_ids = (
-        db.query(models.ProjectMember.project_id)
+    # 自分のメンバーシップを取得（ロール情報含む）
+    memberships = (
+        db.query(models.ProjectMember)
         .filter(models.ProjectMember.user_id == current_user.id)
-        .subquery()
+        .all()
     )
+    role_map = {m.project_id: m.role for m in memberships}
+
     projects = (
         db.query(models.Project)
-        .filter(models.Project.id.in_(member_project_ids))
+        .filter(models.Project.id.in_(role_map.keys()))
         .offset(skip)
         .limit(limit)
         .all()
     )
+
+    # my_role を付加して返す
+    for p in projects:
+        p.my_role = role_map.get(p.id)
+
     return projects
 
 
@@ -69,6 +77,8 @@ def create_project(
     db.add(member)
     db.commit()
     db.refresh(db_project)
+    # 作成者は必ずオーナーなので my_role を設定する
+    db_project.my_role = "owner"
     return db_project
 
 
@@ -77,7 +87,7 @@ def read_project(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
-    _member: models.ProjectMember = Depends(get_project_member),
+    member: models.ProjectMember = Depends(get_project_member),
 ):
     """
     プロジェクト詳細を取得する（メンバーのみアクセス可能）
@@ -85,6 +95,7 @@ def read_project(
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if project is None:
         raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+    project.my_role = member.role
     return project
 
 
@@ -93,18 +104,12 @@ def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
-    member: models.ProjectMember = Depends(get_project_member),
+    _member: models.ProjectMember = Depends(require_owner),
 ):
     """
     プロジェクトを削除する（オーナーのみ実行可能）
     関連データはCascade削除、物理テーブルは手動削除する
     """
-    # オーナー権限チェック
-    if member.role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="プロジェクトの削除はオーナーのみ実行できます",
-        )
 
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if project is None:
@@ -161,18 +166,12 @@ def add_member(
     body: schemas.ProjectMemberAdd,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
-    member: models.ProjectMember = Depends(get_project_member),
+    _member: models.ProjectMember = Depends(require_owner),
 ):
     """
     プロジェクトにメンバーを追加する（オーナーのみ実行可能）
     指定ユーザーが存在しない場合は404、すでにメンバーの場合は400エラーを返す
     """
-    # オーナー権限チェック
-    if member.role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="メンバーの追加はオーナーのみ実行できます",
-        )
 
     # 追加対象ユーザーの存在確認
     target_user = db.query(models.User).filter(models.User.username == body.username).first()
@@ -218,18 +217,12 @@ def remove_member(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
-    member: models.ProjectMember = Depends(get_project_member),
+    _member: models.ProjectMember = Depends(require_owner),
 ):
     """
     プロジェクトからメンバーを削除する（オーナーのみ実行可能）
     オーナー自身は削除不可
     """
-    # オーナー権限チェック
-    if member.role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="メンバーの削除はオーナーのみ実行できます",
-        )
 
     # オーナー自身の削除を禁止
     if user_id == current_user.id:

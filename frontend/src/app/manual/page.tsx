@@ -237,6 +237,28 @@ export default function ManualPage() {
               CSVの1行目はカラム名（ヘッダー行）として認識されます。ヘッダーがないCSVは取り込めません。
             </Callout>
 
+            <SectionTitle>プロジェクト管理</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-2">
+              ホーム画面では「<strong className="text-foreground">プロジェクト</strong>」単位でデータ・設定・結果を管理します。
+            </p>
+            <ul className="space-y-1.5 text-sm text-muted-foreground mb-3">
+              <li className="flex gap-2"><ArrowRight className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" weight="bold" /><span><strong className="text-foreground">プロジェクト検索</strong>：上部の検索バーでプロジェクト名をフィルタリングできます</span></li>
+              <li className="flex gap-2"><ArrowRight className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" weight="bold" /><span><strong className="text-foreground">プロジェクト共有</strong>：カードにマウスを乗せると表示される共有ボタンから、他のユーザーにプロジェクトを共有できます</span></li>
+            </ul>
+
+            <SectionTitle>ステップのロック</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-2">
+              左サイドバーの各ステップには<strong className="text-foreground">ソフトロック</strong>が設定されています。
+            </p>
+            <NiceTable
+              headers={["条件", "ロックされるステップ"]}
+              rows={[
+                ["Step 1（データ管理）が未完了", "Step 3, 4, 5 がロック"],
+                ["Step 4（学習）が未完了",       "Step 5（予測）がロック"],
+              ]}
+            />
+            <Callout type="info">ロックされたステップをクリックすると警告メッセージが表示されます。Step 2（リレーション）は常時アクセス可能です。</Callout>
+
             <SectionTitle>用語の整理</SectionTitle>
             <NiceTable
               headers={["用語", "意味", "例"]}
@@ -302,13 +324,33 @@ export default function ManualPage() {
               整数型のカラムは、ユニーク値が少ない場合（デフォルト：20種類以下）は自動で「categorical」と判定されます。閾値はアップロード画面で変更できます。
             </Callout>
 
-            <SectionTitle><NumberCircleThree className="w-4 h-4 text-violet-600" weight="fill" />値ラベルを設定する（任意）</SectionTitle>
+            <SectionTitle><NumberCircleThree className="w-4 h-4 text-violet-600" weight="fill" />カラムの統計情報を確認する</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              テーブルを展開し、任意のカラム名をクリックすると<strong className="text-foreground">統計情報モーダル</strong>が表示されます。
+            </p>
+            <NiceTable
+              headers={["カラムの型", "表示される統計情報"]}
+              rows={[
+                ["numeric（数値）",      "ヒストグラム、最小値・最大値・平均値・標準偏差、件数"],
+                ["categorical（カテゴリ）", "値の分布グラフ（棒グラフ）、値ラベル設定フォーム"],
+                ["datetime（日時）",     "月別トレンドの折れ線グラフ"],
+              ]}
+            />
+            <Callout type="tip">数値カラムの分布を確認して外れ値がないかチェックすると、学習精度の向上につながります。</Callout>
+
+            <SectionTitle><NumberCircleFour className="w-4 h-4 text-violet-600" weight="fill" />値ラベルを設定する（任意）</SectionTitle>
             <p className="text-sm text-muted-foreground leading-relaxed">
               コード値（0, 1など）に人間が読める名前を付けられます。設定すると予測結果の画面で「0→低リスク」のように表示されます。
             </p>
             <Callout type="tip">
               同じプロジェクト内の別テーブルに同名カラムがあり、ラベルが設定済みの場合は「この定義を使う」ボタンで引き継げます。
             </Callout>
+
+            <SectionTitle><NumberCircleFive className="w-4 h-4 text-violet-600" weight="fill" />テーブルのコピー・削除</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              テーブル名右の <strong className="text-foreground">「…」メニュー</strong> から、テーブルのコピーや削除ができます。
+              テーブルを削除すると、そのテーブルを使用している分析設定や学習結果も削除されます。
+            </p>
           </section>
 
           {/* ═══ Step 2 ═══ */}
@@ -372,6 +414,25 @@ export default function ManualPage() {
               予測に使うカラムにチェックを入れます。リレーション定義に基づいて候補が自動提案されます。
             </p>
             <Callout type="tip">よくわからない場合は全チェックのまま学習してみましょう。Step 4で「特徴量重要度」を確認して、重要度の低いカラムを外して再学習することができます。</Callout>
+
+            <SectionTitle>設定の編集・コピー・削除</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              保存済みの分析設定カードには3つの操作ボタンがあります。
+            </p>
+            <NiceTable
+              headers={["ボタン", "機能"]}
+              rows={[
+                ["✏️ 鉛筆アイコン", "既存の設定を編集する。特徴量選択画面（Step 3）に直接遷移して変更可能"],
+                ["📋 コピーアイコン", "設定を複製して新規作成する。「（コピー）」が名前に付き、元の特徴量選択がそのまま引き継がれる"],
+                ["🗑️ ゴミ箱アイコン", "設定を削除する。紐づく学習ジョブ数が表示されるので確認してから削除"],
+              ]}
+            />
+            <Callout type="tip">
+              同じデータで特徴量やモデルを変えて試行錯誤する場合は、<strong>コピー機能</strong>を使うと効率的です。
+            </Callout>
+            <Callout type="info">
+              ウィザードの入力状態は<strong>自動で一時保存</strong>されます。ブラウザを閉じたり、別のページに移動しても、戻ってきたときに途中の状態から再開できます。
+            </Callout>
           </section>
 
           {/* ═══ Step 4 ═══ */}
@@ -388,7 +449,23 @@ export default function ManualPage() {
               <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" weight="fill" /><span>画面上部のドロップダウンから分析設定を選択して「<strong className="text-foreground">学習実行</strong>」をクリック</span></li>
               <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" weight="fill" /><span>完了するとメッセージが表示され、結果が自動表示される（数秒〜数分）</span></li>
             </ol>
-            <Callout type="info">学習はバックグラウンドで実行されます。他のページを操作していても学習は継続されます。</Callout>
+            <Callout type="info">学習はバックグラウンドで実行されます。他のページを操作していても学習は継続されます。完了すると通知ベル（画面右上）に通知が届きます。</Callout>
+            <Callout type="tip">
+              学習中は<strong>プログレスバー</strong>で進捗状況（0〜100%）とステップ名が表示されます。30分以上応答がない場合はポーリングが自動停止します。
+            </Callout>
+
+            <SectionTitle>過去の学習結果を確認する</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              同じ分析設定で複数回学習を実行した場合、<strong className="text-foreground">過去の学習結果</strong>セクションにすべての完了済みジョブが表示されます。
+              ジョブボタンをクリックすると、そのジョブの結果に切り替えて表示できます。
+            </p>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              2件以上のジョブがある場合は「<strong className="text-foreground">N件の結果を比較</strong>」ボタンが表示され、
+              クリックするとメトリクス（R²、RMSE、Accuracy、AUC、Precision、Recall）を一覧テーブルで比較できます。
+            </p>
+            <Callout type="tip">
+              特徴量を変えて再学習した後に比較テーブルを確認すると、どの変更が精度に効いたかを把握できます。
+            </Callout>
 
             <SectionTitle><NumberCircleTwo className="w-4 h-4 text-emerald-600" weight="fill" />評価指標の読み方</SectionTitle>
             <p className="text-sm font-medium text-foreground mt-3 mb-2">▶ 回帰（数値予測）</p>
@@ -542,6 +619,10 @@ export default function ManualPage() {
               <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>予測用CSVをドラッグ&amp;ドロップ または クリックして選択</span></li>
               <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" weight="fill" /><span>「<strong className="text-foreground">予測実行</strong>」ボタンをクリック → 完了したらCSVをダウンロード</span></li>
             </ol>
+            <Callout type="info">
+              CSVアップロード時に、学習で使用した特徴量とCSVのカラム名を自動照合します。
+              不足しているカラムがある場合は<strong>警告メッセージ</strong>が表示されます（予測自体は実行可能で、不足カラムは欠損値として扱われます）。
+            </Callout>
 
             <SectionTitle><NumberCircleThree className="w-4 h-4 text-orange-600" weight="fill" />予測結果CSVの見方</SectionTitle>
             <NiceTable
@@ -558,6 +639,23 @@ export default function ManualPage() {
             <Callout type="tip">
               <strong>活用例：</strong>分類タスクでリスクの高い上位20%を絞り込む場合 → rank_percent が 80% 以上のレコードを抽出してください。
             </Callout>
+
+            <SectionTitle><NumberCircleFour className="w-4 h-4 text-orange-600" weight="fill" />予測結果のプレビュー</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              予測が完了すると、画面上に<strong className="text-foreground">結果のプレビュー</strong>（先頭20行）と
+              <strong className="text-foreground">基本統計量</strong>（最小値・平均値・最大値）が表示されます。
+              ダウンロード前にデータの概要を確認できます。
+            </p>
+
+            <SectionTitle><NumberCircleFive className="w-4 h-4 text-orange-600" weight="fill" />過去の予測ジョブ</SectionTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+              同じ分析設定で複数回予測を実行した場合、ページ下部に<strong className="text-foreground">過去の予測ジョブ一覧</strong>が表示されます。
+              各ジョブのCSVを個別にダウンロードできます。
+            </p>
+            <ul className="space-y-1.5 text-sm text-muted-foreground">
+              <li className="flex gap-2"><ArrowRight className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" weight="bold" /><span><strong className="text-foreground">名前の変更</strong>：鉛筆アイコンをクリックしてジョブに名前を付けると、後から識別しやすくなります</span></li>
+              <li className="flex gap-2"><ArrowRight className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" weight="bold" /><span><strong className="text-foreground">ダウンロード</strong>：各ジョブの右側にあるダウンロードボタンからCSVを取得できます</span></li>
+            </ul>
           </section>
 
           {/* ═══ 用語集 ═══ */}
@@ -578,6 +676,9 @@ export default function ManualPage() {
                 ["AUC",                "分類モデルの識別性能（0.5〜1.0）。0.5はランダムと同等"],
                 ["RMSE",               "回帰モデルの予測誤差。小さいほど精度が高い"],
                 ["MAE",                "回帰モデルの平均誤差。外れ値の影響を受けにくい"],
+                ["Precision（適合率）", "モデルが陽性と予測したもののうち、実際に陽性だった割合"],
+                ["Recall（再現率）",   "実際の陽性のうち、モデルが正しく検出できた割合"],
+                ["SHAP",               "各特徴量が個々の予測値をどれだけ動かしたかの寄与度"],
                 ["特徴量重要度",       "各説明変数が予測にどれくらい貢献しているかの指標"],
                 ["p値",                "係数が偶然生じた確率。0.05未満で「統計的に有意」と判断"],
                 ["プロジェクト",       "データ・設定・結果をまとめて管理する単位"],
@@ -628,6 +729,23 @@ export default function ManualPage() {
 
             <FaqItem q="予測結果の predicted_value が 0 か 1 しかない（分類タスク）">
               古い学習済みモデルを使っている可能性があります。<strong>再学習</strong> を実行してください。現在のバージョンでは、分類タスクの predicted_value は「陽性クラスの確率（0〜1 の小数）」として出力されます。
+            </FaqItem>
+
+            <FaqItem q="CSVアップロード時に「特徴量がCSVに見つかりません」という警告が出た">
+              予測用CSVに学習時の特徴量カラムが含まれていない場合に表示される<strong>事前チェックの警告</strong>です。
+              予測は実行可能ですが、不足カラムは欠損値として扱われるため精度が下がる場合があります。
+              CSVのカラム名が学習時と一致しているか確認してください。
+            </FaqItem>
+
+            <FaqItem q="分析設定のウィザードで入力途中のデータが消えた">
+              通常は<strong>自動で一時保存</strong>されるため、ページを離れて戻っても復元されます。
+              ただし、「編集をキャンセル」ボタンや設定の保存完了時には一時保存データがクリアされます。
+              別のブラウザやシークレットモードでは復元されません。
+            </FaqItem>
+
+            <FaqItem q="過去の学習結果を比較したい">
+              ダッシュボードの「過去の学習結果」セクションで、2件以上のジョブがある場合に「<strong>N件の結果を比較</strong>」ボタンが表示されます。
+              クリックすると各ジョブのメトリクス（R²、RMSE、Accuracy等）を一覧テーブルで比較できます。
             </FaqItem>
           </section>
 

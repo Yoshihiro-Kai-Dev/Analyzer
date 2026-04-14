@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分析くん UI オーバーホール計画 — ワイヤーフレーム比較</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Inter:wght@400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    /* 現状テーマ */
+    --current-primary: hsl(155, 40%, 30%);
+    --current-sidebar: hsl(155, 25%, 18%);
+    --current-bg: hsl(40, 20%, 96%);
+
+    /* 提案テーマ: Zinc + Amber */
+    --new-bg: #fafaf9;
+    --new-fg: #1c1917;
+    --new-muted: #a8a29e;
+    --new-border: #e7e5e4;
+    --new-accent: #d97706;
+    --new-accent-light: #fef3c7;
+    --new-surface: #ffffff;
+    --new-sidebar-bg: #1c1917;
+    --new-sidebar-text: #e7e5e4;
+    --new-sidebar-accent: #d97706;
+  }
+
+  body {
+    font-family: 'BIZ UDPGothic', 'Inter', sans-serif;
+    background: #f5f5f4;
+    color: #1c1917;
+    line-height: 1.6;
+  }
+
+  /* ===== ナビゲーション ===== */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    background: #1c1917;
+    color: #e7e5e4;
+    padding: 12px 32px;
+    display: flex; align-items: center; gap: 24px;
+    font-size: 14px;
+    border-bottom: 1px solid #292524;
+  }
+  .nav-title { font-weight: 700; font-size: 16px; color: #d97706; }
+  .nav a {
+    color: #a8a29e; text-decoration: none;
+    padding: 4px 12px; border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .nav a:hover, .nav a.active { color: #fafaf9; background: #292524; }
+  .nav-sep { width: 1px; height: 20px; background: #44403c; }
+
+  /* ===== セクション ===== */
+  .section {
+    max-width: 1400px; margin: 0 auto;
+    padding: 48px 32px;
+  }
+  .section + .section { border-top: 1px solid #d6d3d1; }
+
+  .section-header {
+    margin-bottom: 32px;
+  }
+  .section-header h2 {
+    font-size: 22px; font-weight: 700;
+    color: #1c1917;
+    margin-bottom: 6px;
+  }
+  .section-header p {
+    font-size: 14px; color: #78716c;
+  }
+
+  /* ===== 比較レイアウト ===== */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .compare-panel {
+    border: 1px solid #d6d3d1;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .compare-panel.current { border-color: #dc2626; }
+  .compare-panel.proposed { border-color: #16a34a; }
+
+  .compare-label {
+    padding: 10px 16px;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .compare-panel.current .compare-label {
+    background: #fef2f2; color: #dc2626;
+    border-bottom: 1px solid #fecaca;
+  }
+  .compare-panel.proposed .compare-label {
+    background: #f0fdf4; color: #16a34a;
+    border-bottom: 1px solid #bbf7d0;
+  }
+  .compare-body { padding: 20px; }
+
+  /* ===== 問題タグ ===== */
+  .issue-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 11px; font-weight: 600;
+    border-radius: 4px;
+    margin: 2px;
+  }
+  .issue-tag.card-hell { background: #fef3c7; color: #92400e; }
+  .issue-tag.uppercase { background: #ede9fe; color: #5b21b6; }
+  .issue-tag.giant-num { background: #dbeafe; color: #1e40af; }
+  .issue-tag.hover-shadow { background: #fce7f3; color: #9d174d; }
+  .issue-tag.icon-overuse { background: #d1fae5; color: #065f46; }
+
+  /* ===== 現状ワイヤーフレーム内パーツ ===== */
+  .wire { font-family: 'Inter', sans-serif; font-size: 13px; }
+
+  /* --- 現状: Card地獄のダッシュボード --- */
+  .current-dash {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .current-card {
+    border: 1px solid #d1d5db; border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    background: #fff;
+  }
+  .current-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    transform: translateY(-2px);
+    transition: all 0.2s;
+  }
+  .current-card .label {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #6b7280;
+    margin-bottom: 8px;
+  }
+  .current-card .value {
+    font-size: 28px; font-weight: 700;
+    font-family: monospace;
+    color: hsl(155, 40%, 30%);
+  }
+  .current-card .sub {
+    font-size: 11px; color: #9ca3af; margin-top: 4px;
+  }
+
+  /* --- 提案: テーブル形式メトリクス --- */
+  .new-metrics {
+    width: 100%;
+  }
+  .new-metrics-row {
+    display: flex; align-items: baseline;
+    padding: 10px 0;
+    border-bottom: 1px solid #e7e5e4;
+  }
+  .new-metrics-row:last-child { border-bottom: none; }
+  .new-metrics-label {
+    flex: 1;
+    font-size: 13px; color: #78716c;
+  }
+  .new-metrics-value {
+    font-size: 18px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #1c1917;
+  }
+  .new-metrics-unit {
+    font-size: 12px; color: #a8a29e;
+    margin-left: 4px;
+  }
+  .new-metrics-bar {
+    width: 120px; height: 4px;
+    background: #e7e5e4; border-radius: 2px;
+    margin-left: 16px; overflow: hidden;
+  }
+  .new-metrics-bar-fill {
+    height: 100%; border-radius: 2px;
+    background: #d97706;
+  }
+
+  /* --- 現状: サイドバー --- */
+  .current-sidebar {
+    width: 220px; background: hsl(155, 25%, 18%);
+    border-radius: 8px; padding: 16px;
+    color: #fff; font-size: 12px;
+  }
+  .current-sidebar .logo {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 16px; padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .current-sidebar .logo-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: hsl(155, 50%, 60%); display: flex;
+    align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .current-sidebar .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px;
+    margin-bottom: 2px; color: rgba(255,255,255,0.6);
+  }
+  .current-sidebar .nav-item.active {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border-left: 3px solid hsl(155, 50%, 60%);
+  }
+  .current-sidebar .step-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+  }
+  .current-sidebar .nav-item.active .step-num {
+    background: hsl(155, 50%, 60%); color: hsl(155, 25%, 18%);
+  }
+
+  /* --- 提案: サイドバー --- */
+  .new-sidebar {
+    width: 220px; background: #1c1917;
+    border-radius: 8px; padding: 16px;
+    color: #e7e5e4; font-size: 12px;
+  }
+  .new-sidebar .logo {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 1px solid #292524;
+  }
+  .new-sidebar .logo-mark {
+    width: 6px; height: 22px; background: #d97706;
+    border-radius: 2px;
+  }
+  .new-sidebar .logo-text {
+    font-weight: 700; font-size: 14px;
+  }
+  .new-sidebar .section-label {
+    font-size: 10px; color: #78716c;
+    padding: 0 10px; margin-bottom: 6px; margin-top: 14px;
+  }
+  .new-sidebar .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; border-radius: 6px;
+    margin-bottom: 1px; color: #a8a29e;
+    transition: all 0.1s;
+  }
+  .new-sidebar .nav-item:hover { color: #e7e5e4; background: #292524; }
+  .new-sidebar .nav-item.active {
+    color: #fafaf9;
+    background: transparent;
+    border-left: 2px solid #d97706;
+    padding-left: 8px;
+  }
+  .new-sidebar .nav-item .num {
+    font-variant-numeric: tabular-nums;
+    font-size: 11px; color: #57534e;
+    width: 16px;
+  }
+  .new-sidebar .nav-item.active .num { color: #d97706; }
+
+  /* --- 現状: プロジェクトカード --- */
+  .current-projects {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .current-proj-card {
+    border: 1px solid #d1d5db; border-radius: 12px;
+    padding: 20px; background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+  }
+  .current-proj-card:hover {
+    border-left-color: hsl(155, 40%, 30%);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+  }
+  .current-proj-card .title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+  .current-proj-card .desc { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+  .current-proj-card .meta { font-size: 11px; color: #9ca3af; display: flex; gap: 8px; align-items: center; }
+
+  /* --- 提案: プロジェクトリスト --- */
+  .new-project-list { width: 100%; }
+  .new-proj-row {
+    display: flex; align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid #e7e5e4;
+    gap: 16px;
+  }
+  .new-proj-row:first-child { padding-top: 0; }
+  .new-proj-row:last-child { border-bottom: none; }
+  .new-proj-indicator {
+    width: 3px; height: 32px; border-radius: 2px;
+    background: #e7e5e4;
+  }
+  .new-proj-row:first-child .new-proj-indicator { background: #d97706; }
+  .new-proj-info { flex: 1; }
+  .new-proj-info .name { font-weight: 600; font-size: 14px; color: #1c1917; }
+  .new-proj-info .desc { font-size: 12px; color: #78716c; margin-top: 2px; }
+  .new-proj-meta {
+    font-size: 11px; color: #a8a29e;
+    text-align: right;
+  }
+  .new-proj-action {
+    font-size: 12px; color: #d97706; font-weight: 500;
+    cursor: pointer;
+  }
+
+  /* --- 現状: 空状態 --- */
+  .current-empty {
+    text-align: center; padding: 48px 20px;
+  }
+  .current-empty .icon-circle {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: linear-gradient(135deg, hsl(155, 30%, 92%), hsl(155, 40%, 85%));
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px;
+    font-size: 28px; color: hsl(155, 40%, 30%);
+  }
+  .current-empty h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .current-empty p { font-size: 13px; color: #6b7280; margin-bottom: 20px; }
+  .current-empty .checklist {
+    text-align: left; display: inline-block;
+    font-size: 12px; color: #6b7280;
+  }
+  .current-empty .checklist div {
+    padding: 4px 0; display: flex; align-items: center; gap: 8px;
+  }
+  .current-empty .cta {
+    margin-top: 20px; padding: 10px 24px;
+    background: hsl(155, 40%, 30%); color: white;
+    border: none; border-radius: 8px; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+  }
+
+  /* --- 提案: 空状態 --- */
+  .new-empty {
+    padding: 60px 20px; text-align: center;
+  }
+  .new-empty p.main {
+    font-size: 14px; color: #78716c;
+  }
+  .new-empty p.sub {
+    font-size: 12px; color: #a8a29e; margin-top: 6px;
+  }
+  .new-empty .action {
+    margin-top: 20px;
+    display: inline-block;
+    padding: 8px 20px;
+    border: 1px solid #d6d3d1;
+    border-radius: 6px;
+    font-size: 13px; color: #1c1917;
+    background: #fff; cursor: pointer;
+    font-weight: 500;
+    transition: all 0.1s;
+  }
+  .new-empty .action:hover {
+    border-color: #d97706; color: #d97706;
+  }
+
+  /* --- 現状: ステップヘッダー --- */
+  .current-steps {
+    display: flex; gap: 8px;
+  }
+  .current-step {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    background: #f3f4f6; border-radius: 8px;
+    font-size: 12px;
+  }
+  .current-step .badge {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: hsl(155, 40%, 30%); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .current-step .step-label {
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 600; color: #374151;
+  }
+
+  /* --- 提案: ステップヘッダー --- */
+  .new-steps {
+    display: flex; gap: 0; border-bottom: 1px solid #e7e5e4;
+  }
+  .new-step {
+    padding: 12px 20px;
+    font-size: 13px; color: #a8a29e;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .new-step:hover { color: #57534e; }
+  .new-step.active {
+    color: #1c1917; font-weight: 600;
+    border-bottom-color: #d97706;
+  }
+  .new-step .num {
+    font-variant-numeric: tabular-nums;
+    margin-right: 6px;
+    color: #a8a29e;
+  }
+  .new-step.active .num { color: #d97706; }
+
+  /* --- 提案: データテーブル代替 --- */
+  .new-data-section {
+    border-bottom: 1px solid #e7e5e4;
+    padding: 16px 0;
+  }
+  .new-data-header {
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+  }
+  .new-data-header .table-name {
+    font-weight: 600; font-size: 14px; color: #1c1917;
+  }
+  .new-data-header .row-count {
+    font-size: 12px; color: #a8a29e;
+    font-variant-numeric: tabular-nums;
+  }
+  .new-data-header .chevron {
+    margin-left: auto; color: #a8a29e; font-size: 12px;
+  }
+  .new-data-cols {
+    margin-top: 12px; padding-left: 0;
+  }
+  .new-data-col {
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px 0;
+    font-size: 12px;
+  }
+  .new-data-col .col-name { color: #1c1917; flex: 1; }
+  .new-data-col .col-type {
+    font-size: 11px; padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+  .col-type.numeric { background: #fef3c7; color: #92400e; }
+  .col-type.categorical { background: #e7e5e4; color: #57534e; }
+  .col-type.datetime { background: #fff7ed; color: #c2410c; }
+
+  /* --- ページ全体レイアウト比較 --- */
+  .layout-compare {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    margin-top: 24px;
+  }
+  .layout-frame {
+    border: 1px solid #d6d3d1; border-radius: 12px;
+    overflow: hidden; background: #fff;
+    min-height: 400px;
+  }
+  .layout-frame .frame-label {
+    padding: 8px 12px; font-size: 11px; font-weight: 600;
+  }
+
+  /* --- フルページ プレビュー --- */
+  .full-preview {
+    border: 1px solid #d6d3d1; border-radius: 12px;
+    overflow: hidden; background: #fafaf9;
+    display: flex; min-height: 500px;
+  }
+  .full-preview .sidebar-area {
+    width: 220px; flex-shrink: 0;
+  }
+  .full-preview .main-area {
+    flex: 1; padding: 24px;
+    border-left: 1px solid #e7e5e4;
+  }
+  .full-preview .topbar {
+    display: flex; align-items: center;
+    padding: 10px 0; margin-bottom: 20px;
+    border-bottom: 1px solid #e7e5e4;
+    font-size: 12px; color: #a8a29e;
+  }
+  .full-preview .topbar .crumb { color: #78716c; }
+  .full-preview .topbar .crumb-sep { margin: 0 8px; color: #d6d3d1; }
+
+  /* === カラーパレット === */
+  .palette {
+    display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;
+  }
+  .swatch {
+    width: 48px; height: 48px; border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.06);
+    position: relative;
+  }
+  .swatch-label {
+    font-size: 10px; color: #78716c; margin-top: 4px; text-align: center;
+    width: 48px;
+  }
+  .swatch-group { display: flex; flex-direction: column; align-items: center; }
+
+  /* 変更理由パネル */
+  .rationale {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: #92400e;
+    margin-top: 16px;
+    line-height: 1.7;
+  }
+  .rationale strong { color: #78350f; }
+
+  /* サマリーテーブル */
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .summary-table th {
+    text-align: left; padding: 10px 12px;
+    background: #f5f5f4; font-weight: 600;
+    border-bottom: 2px solid #d6d3d1;
+  }
+  .summary-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e7e5e4;
+    vertical-align: top;
+  }
+  .summary-table tr:last-child td { border-bottom: none; }
+  .priority-high { color: #dc2626; font-weight: 600; }
+  .priority-mid { color: #d97706; font-weight: 600; }
+  .priority-low { color: #16a34a; font-weight: 600; }
+
+  /* タブ切り替え */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid #d6d3d1; margin-bottom: 24px; }
+  .tab {
+    padding: 10px 20px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: #a8a29e;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .tab:hover { color: #57534e; }
+  .tab.active { color: #1c1917; border-bottom-color: #d97706; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* アノテーション */
+  .annotation {
+    position: relative;
+    display: inline-block;
+  }
+  .annotation::after {
+    content: attr(data-note);
+    position: absolute; top: -8px; right: -8px;
+    background: #dc2626; color: #fff;
+    font-size: 9px; padding: 1px 5px;
+    border-radius: 3px; white-space: nowrap;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- ナビゲーション -->
+<nav class="nav">
+  <span class="nav-title">分析くん UI Overhaul</span>
+  <div class="nav-sep"></div>
+  <a href="#overview" class="active">概要</a>
+  <a href="#colors">カラー</a>
+  <a href="#sidebar">サイドバー</a>
+  <a href="#dashboard">ダッシュボード</a>
+  <a href="#projects">プロジェクト一覧</a>
+  <a href="#empty">空状態</a>
+  <a href="#steps">ステップUI</a>
+  <a href="#data">データ管理</a>
+  <a href="#fullpage">フルページ</a>
+  <a href="#plan">実行計画</a>
+</nav>
+
+<!-- ===== 1. 概要 ===== -->
+<section class="section" id="overview">
+  <div class="section-header">
+    <h2>UIオーバーホール計画 — 概要</h2>
+    <p>現状のUI分析と、non-clichéデザイン原則に基づく改善提案</p>
+  </div>
+
+  <h3 style="font-size:16px; font-weight:600; margin-bottom:16px;">検出されたAIクリシェ</h3>
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th style="width:160px;">問題</th>
+        <th>現状</th>
+        <th style="width:140px;">深刻度</th>
+        <th>改善方針</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="issue-tag card-hell">Card地獄</span></td>
+        <td>全セクションがCardコンポーネントで包まれている。メトリクス、テーブル、設定、すべてがCard。</td>
+        <td class="priority-high">高</td>
+        <td>セクション区切り線・背景色差・左ボーダーで代替。Cardは対話的要素のみ。</td>
+      </tr>
+      <tr>
+        <td><span class="issue-tag uppercase">uppercase見出し</span></td>
+        <td>"STEP 1" "STEP 2" 等、小見出しにuppercase+tracking-wideを多用</td>
+        <td class="priority-mid">中</td>
+        <td>通常のフォントウェイト階層で見出しを構成。uppercaseを廃止。</td>
+      </tr>
+      <tr>
+        <td><span class="issue-tag giant-num">巨大数値メトリクス</span></td>
+        <td>ダッシュボードのKPIがtext-3xl font-bold monoで表示</td>
+        <td class="priority-mid">中</td>
+        <td>テーブル/インライン形式に変更。数値と文脈を同列に。</td>
+      </tr>
+      <tr>
+        <td><span class="issue-tag hover-shadow">ホバーシャドウ</span></td>
+        <td>全Cardにhover:shadow-md + translateY(-2px)が無条件付与</td>
+        <td class="priority-low">低</td>
+        <td>クリック可能要素のみにホバー効果。表示専用要素からは除去。</td>
+      </tr>
+      <tr>
+        <td><span class="issue-tag icon-overuse">アイコン過多</span></td>
+        <td>Phosphorアイコン40種以上。ボタン・バッジ・ラベルほぼ全てにアイコン付き。</td>
+        <td class="priority-mid">中</td>
+        <td>テキストで意味が伝わる場所からアイコンを除去。アイコン専用ボタンのみ残す。</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== 2. カラーパレット ===== -->
+<section class="section" id="colors">
+  <div class="section-header">
+    <h2>カラーパレット比較</h2>
+    <p>Forest Green + Cream → Zinc + Amber（精密機器的な印象へ）</p>
+  </div>
+
+  <div class="compare">
+    <div class="compare-panel current">
+      <div class="compare-label">現状: Forest Green + Cream</div>
+      <div class="compare-body">
+        <div class="palette">
+          <div class="swatch-group">
+            <div class="swatch" style="background: hsl(155, 40%, 30%);"></div>
+            <div class="swatch-label">Primary</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: hsl(155, 25%, 18%);"></div>
+            <div class="swatch-label">Sidebar</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: hsl(40, 20%, 96%);"></div>
+            <div class="swatch-label">BG</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: hsl(155, 30%, 92%);"></div>
+            <div class="swatch-label">Secondary</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: hsl(151, 55%, 42%);"></div>
+            <div class="swatch-label">Success</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: hsl(38, 96%, 54%);"></div>
+            <div class="swatch-label">Warning</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: hsl(0, 84%, 60%);"></div>
+            <div class="swatch-label">Danger</div>
+          </div>
+        </div>
+        <div class="rationale">
+          <strong>問題:</strong> 全体が緑一色で「分析ツールだから緑」という安易な選択。コージー感は出ているが、分析ツールとしての精密さ・信頼感が弱い。
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-panel proposed">
+      <div class="compare-label">提案: Stone + Amber（精密計器）</div>
+      <div class="compare-body">
+        <div class="palette">
+          <div class="swatch-group">
+            <div class="swatch" style="background: #1c1917;"></div>
+            <div class="swatch-label">FG</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: #d97706;"></div>
+            <div class="swatch-label">Accent</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: #fafaf9;"></div>
+            <div class="swatch-label">BG</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: #e7e5e4;"></div>
+            <div class="swatch-label">Border</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: #78716c;"></div>
+            <div class="swatch-label">Muted</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: #16a34a;"></div>
+            <div class="swatch-label">Success</div>
+          </div>
+          <div class="swatch-group">
+            <div class="swatch" style="background: #dc2626;"></div>
+            <div class="swatch-label">Danger</div>
+          </div>
+        </div>
+        <div class="rationale">
+          <strong>理由:</strong> Stone系グレーは暖色みがあり、BIZ UDPGothicと相性が良い。Amberアクセント1色に絞ることで「分析ツール」としての精密さと視線誘導を両立。色数を減らし、情報階層を色ではなくウェイト・サイズ・余白で表現。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 3. サイドバー ===== -->
+<section class="section" id="sidebar">
+  <div class="section-header">
+    <h2>サイドバー比較</h2>
+    <p>ロゴ・ナビゲーション・ステップ表示の改善</p>
+  </div>
+
+  <div class="compare">
+    <div class="compare-panel current">
+      <div class="compare-label">現状 — 丸バッジ + アイコン過多</div>
+      <div class="compare-body" style="display:flex; justify-content:center; padding:24px;">
+        <div class="current-sidebar">
+          <div class="logo">
+            <div class="logo-icon">📊</div>
+            <span style="font-weight:700; font-size:13px;">分析くん</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.08); border-radius:6px; padding:8px 10px; margin-bottom:12px;">
+            <div style="font-size:10px; color:rgba(255,255,255,0.4);">Project #1</div>
+            <div style="font-size:13px; font-weight:600;">売上分析</div>
+          </div>
+          <div class="nav-item">
+            <div class="step-num">1</div>
+            <span>📁</span> データ管理
+          </div>
+          <div class="nav-item">
+            <div class="step-num">2</div>
+            <span>🔗</span> リレーション
+          </div>
+          <div class="nav-item active">
+            <div class="step-num">3</div>
+            <span>⚙️</span> 分析設定
+          </div>
+          <div class="nav-item">
+            <div class="step-num">4</div>
+            <span>📈</span> ダッシュボード
+          </div>
+          <div class="nav-item">
+            <div class="step-num">5</div>
+            <span>🎯</span> 予測
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-panel proposed">
+      <div class="compare-label">提案 — ミニマル番号 + テキスト主体</div>
+      <div class="compare-body" style="display:flex; justify-content:center; padding:24px;">
+        <div class="new-sidebar">
+          <div class="logo">
+            <div class="logo-mark"></div>
+            <span class="logo-text">分析くん</span>
+          </div>
+          <div style="padding:6px 10px; font-size:13px; font-weight:600; color:#fafaf9; margin-bottom:4px;">
+            売上分析
+          </div>
+          <div class="section-label">ワークフロー</div>
+          <div class="nav-item">
+            <span class="num">1</span> データ管理
+          </div>
+          <div class="nav-item">
+            <span class="num">2</span> リレーション
+          </div>
+          <div class="nav-item active">
+            <span class="num">3</span> 分析設定
+          </div>
+          <div class="nav-item">
+            <span class="num">4</span> ダッシュボード
+          </div>
+          <div class="nav-item">
+            <span class="num">5</span> 予測
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rationale">
+    <strong>変更点:</strong> ①丸バッジ数字→プレーン数字、②アイコン全廃（テキストで十分意味が伝わる）、③ロゴをアイコン→バー+テキスト、④ホバーは背景色のみでシンプルに。アクセント色（amber）は現在のステップのみに使用し、視線を誘導。
+  </div>
+</section>
+
+<!-- ===== 4. ダッシュボード メトリクス ===== -->
+<section class="section" id="dashboard">
+  <div class="section-header">
+    <h2>ダッシュボード メトリクス比較</h2>
+    <p>KPIカード群 → インラインテーブル形式</p>
+  </div>
+
+  <div class="compare">
+    <div class="compare-panel current">
+      <div class="compare-label">現状 — 巨大数値 Card 3列 <span class="issue-tag card-hell">Card地獄</span> <span class="issue-tag giant-num">巨大数値</span> <span class="issue-tag uppercase">uppercase</span></div>
+      <div class="compare-body">
+        <div class="current-dash">
+          <div class="current-card" style="border-left: 3px solid hsl(155, 40%, 30%);">
+            <div class="label">R² SCORE</div>
+            <div class="value">0.873</div>
+            <div class="sub">決定係数</div>
+          </div>
+          <div class="current-card" style="border-left: 3px solid hsl(151, 55%, 42%);">
+            <div class="label">RMSE</div>
+            <div class="value">12.4</div>
+            <div class="sub">二乗平均平方根誤差</div>
+          </div>
+          <div class="current-card" style="border-left: 3px solid hsl(38, 96%, 54%);">
+            <div class="label">MAE</div>
+            <div class="value">8.7</div>
+            <div class="sub">平均絶対誤差</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-panel proposed">
+      <div class="compare-label">提案 — テーブル + インラインバー</div>
+      <div class="compare-body">
+        <div style="border-left: 2px solid #d97706; padding-left: 16px;">
+          <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #1c1917;">モデル精度</h3>
+          <div class="new-metrics">
+            <div class="new-metrics-row">
+              <span class="new-metrics-label">R²スコア</span>
+              <span class="new-metrics-value">0.873</span>
+              <div class="new-metrics-bar"><div class="new-metrics-bar-fill" style="width:87.3%"></div></div>
+            </div>
+            <div class="new-metrics-row">
+              <span class="new-metrics-label">RMSE</span>
+              <span class="new-metrics-value">12.4</span>
+              <div class="new-metrics-bar"><div class="new-metrics-bar-fill" style="width:40%"></div></div>
+            </div>
+            <div class="new-metrics-row">
+              <span class="new-metrics-label">MAE</span>
+              <span class="new-metrics-value">8.7</span>
+              <div class="new-metrics-bar"><div class="new-metrics-bar-fill" style="width:28%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rationale">
+    <strong>変更点:</strong> ①3枚のCardを1つのセクションに統合、②uppercaseラベル廃止→普通の日本語ラベル、③巨大数値（28px）→適度なサイズ（18px）に、④左ボーダーアクセントで領域を示す、⑤インラインバーで相対的な大きさを視覚化。情報密度が上がり、比較が容易になる。
+  </div>
+</section>
+
+<!-- ===== 5. プロジェクト一覧 ===== -->
+<section class="section" id="projects">
+  <div class="section-header">
+    <h2>プロジェクト一覧比較</h2>
+    <p>カードグリッド → リスト形式</p>
+  </div>
+
+  <div class="compare">
+    <div class="compare-panel current">
+      <div class="compare-label">現状 — 3列カードグリッド + ホバーエフェクト</div>
+      <div class="compare-body">
+        <div class="current-projects">
+          <div class="current-proj-card">
+            <div class="title">売上分析プロジェクト</div>
+            <div class="desc">2024年Q4の売上データを分析し、要因を特定する</div>
+            <div class="meta">
+              <span>📅 2024/03/15</span>
+              <span style="color: hsl(155, 40%, 30%);">開く →</span>
+            </div>
+          </div>
+          <div class="current-proj-card">
+            <div class="title">顧客離脱予測</div>
+            <div class="desc">解約リスクの高い顧客を事前に特定する</div>
+            <div class="meta">
+              <span>📅 2024/03/10</span>
+              <span style="color: hsl(155, 40%, 30%);">開く →</span>
+            </div>
+          </div>
+          <div class="current-proj-card">
+            <div class="title">需要予測モデル</div>
+            <div class="desc">在庫最適化のための需要予測</div>
+            <div class="meta">
+              <span>📅 2024/03/01</span>
+              <span style="color: hsl(155, 40%, 30%);">開く →</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-panel proposed">
+      <div class="compare-label">提案 — リスト形式（情報密度↑、装飾↓）</div>
+      <div class="compare-body">
+        <div class="new-project-list">
+          <div class="new-proj-row">
+            <div class="new-proj-indicator"></div>
+            <div class="new-proj-info">
+              <div class="name">売上分析プロジェクト</div>
+              <div class="desc">2024年Q4の売上データを分析し、要因を特定する</div>
+            </div>
+            <div class="new-proj-meta">3月15日</div>
+            <div class="new-proj-action">開く</div>
+          </div>
+          <div class="new-proj-row">
+            <div class="new-proj-indicator"></div>
+            <div class="new-proj-info">
+              <div class="name">顧客離脱予測</div>
+              <div class="desc">解約リスクの高い顧客を事前に特定する</div>
+            </div>
+            <div class="new-proj-meta">3月10日</div>
+            <div class="new-proj-action">開く</div>
+          </div>
+          <div class="new-proj-row">
+            <div class="new-proj-indicator"></div>
+            <div class="new-proj-info">
+              <div class="name">需要予測モデル</div>
+              <div class="desc">在庫最適化のための需要予測</div>
+            </div>
+            <div class="new-proj-meta">3月1日</div>
+            <div class="new-proj-action">開く</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rationale">
+    <strong>注:</strong> プロジェクト数が少ない（社内利用）場合、カードグリッドはスペースの無駄。リスト形式なら1画面に多くのプロジェクトを表示でき、スキャンしやすい。左のインジケーターバーで最近使ったプロジェクトを示す。
+  </div>
+</section>
+
+<!-- ===== 6. 空状態 ===== -->
+<section class="section" id="empty">
+  <div class="section-header">
+    <h2>空状態比較</h2>
+    <p>グラデーション丸アイコン → テキスト主体</p>
+  </div>
+
+  <div class="compare">
+    <div class="compare-panel current">
+      <div class="compare-label">現状 — 丸アイコン + チェックリスト + CTAボタン</div>
+      <div class="compare-body">
+        <div class="current-empty">
+          <div class="icon-circle">📊</div>
+          <h3>プロジェクトがありません</h3>
+          <p>はじめてのプロジェクトを作成しましょう</p>
+          <div class="checklist">
+            <div>✅ ステップ1: CSVデータをアップロード</div>
+            <div>✅ ステップ2: テーブル間のリレーションを設定</div>
+            <div>✅ ステップ3: 分析設定を作成して学習開始</div>
+          </div>
+          <button class="cta">＋ プロジェクトを作成</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-panel proposed">
+      <div class="compare-label">提案 — テキストのみ、静かな誘導</div>
+      <div class="compare-body">
+        <div class="new-empty">
+          <p class="main">まだプロジェクトがありません</p>
+          <p class="sub">CSVデータをアップロードして分析を始められます</p>
+          <button class="action">プロジェクトを作成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rationale">
+    <strong>変更点:</strong> ①グラデーション丸アイコン廃止（AIクリシェ）、②チェックリストは空状態では情報過多→ヘルプやマニュアルに移動、③CTAは控えめなoutlineボタン（主張しすぎない）。空状態は「何もない」ことを正直に伝えれば十分。
+  </div>
+</section>
+
+<!-- ===== 7. ステップUI ===== -->
+<section class="section" id="steps">
+  <div class="section-header">
+    <h2>ステップUI比較</h2>
+    <p>丸バッジ + uppercase → タブ形式</p>
+  </div>
+
+  <div class="compare">
+    <div class="compare-panel current">
+      <div class="compare-label">現状 — 丸バッジ + UPPERCASE ラベル</div>
+      <div class="compare-body">
+        <div class="current-steps">
+          <div class="current-step">
+            <div class="badge">1</div>
+            <span class="step-label">DATA</span>
+          </div>
+          <div class="current-step">
+            <div class="badge">2</div>
+            <span class="step-label">RELATIONS</span>
+          </div>
+          <div class="current-step" style="background: hsl(155, 30%, 92%); border: 1px solid hsl(155, 40%, 30%);">
+            <div class="badge">3</div>
+            <span class="step-label">ANALYSIS</span>
+          </div>
+          <div class="current-step">
+            <div class="badge">4</div>
+            <span class="step-label">DASHBOARD</span>
+          </div>
+          <div class="current-step">
+            <div class="badge">5</div>
+            <span class="step-label">PREDICT</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-panel proposed">
+      <div class="compare-label">提案 — 下線タブ（日本語ラベル）</div>
+      <div class="compare-body">
+        <div class="new-steps">
+          <div class="new-step"><span class="num">1.</span>データ</div>
+          <div class="new-step"><span class="num">2.</span>リレーション</div>
+          <div class="new-step active"><span class="num">3.</span>分析設定</div>
+          <div class="new-step"><span class="num">4.</span>ダッシュボード</div>
+          <div class="new-step"><span class="num">5.</span>予測</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 8. データ管理 ===== -->
+<section class="section" id="data">
+  <div class="section-header">
+    <h2>データ管理ページ比較</h2>
+    <p>アコーディオンCard → 区切り線セクション</p>
+  </div>
+
+  <div class="compare">
+    <div class="compare-panel current">
+      <div class="compare-label">現状 — Card内アコーディオン + 型バッジ（カラフル）</div>
+      <div class="compare-body">
+        <div style="border: 1px solid #d1d5db; border-radius:12px; padding:16px; background:#fff; box-shadow: 0 1px 4px rgba(0,0,0,0.05); margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:10px; font-size:14px; font-weight:600;">
+            <span>📁</span> sales_data
+            <span style="font-size:11px; color:#6b7280; margin-left:auto;">1,234行</span>
+            <span style="font-size:11px;">▼</span>
+          </div>
+          <div style="margin-top:12px; font-size:12px;">
+            <div style="display:flex; gap:8px; padding:4px 0; align-items:center;">
+              <span>customer_id</span>
+              <span style="background:#f3e8ff; color:#7c3aed; padding:1px 6px; border-radius:4px; font-size:10px;">id</span>
+            </div>
+            <div style="display:flex; gap:8px; padding:4px 0; align-items:center;">
+              <span>revenue</span>
+              <span style="background:hsl(155,30%,92%); color:hsl(155,40%,30%); padding:1px 6px; border-radius:4px; font-size:10px;">numeric</span>
+            </div>
+            <div style="display:flex; gap:8px; padding:4px 0; align-items:center;">
+              <span>category</span>
+              <span style="background:#e0e7ff; color:#3730a3; padding:1px 6px; border-radius:4px; font-size:10px;">categorical</span>
+            </div>
+          </div>
+        </div>
+        <div style="border: 1px solid #d1d5db; border-radius:12px; padding:16px; background:#fff; box-shadow: 0 1px 4px rgba(0,0,0,0.05);">
+          <div style="display:flex; align-items:center; gap:10px; font-size:14px; font-weight:600;">
+            <span>📁</span> customer_master
+            <span style="font-size:11px; color:#6b7280; margin-left:auto;">567行</span>
+            <span style="font-size:11px;">▶</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-panel proposed">
+      <div class="compare-label">提案 — 区切り線 + 控えめな型表示</div>
+      <div class="compare-body">
+        <div class="new-data-section">
+          <div class="new-data-header">
+            <span class="table-name">sales_data</span>
+            <span class="row-count">1,234行</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="new-data-cols">
+            <div class="new-data-col">
+              <span class="col-name">customer_id</span>
+              <span class="col-type" style="color:#78716c; background:transparent; font-style:italic;">id</span>
+            </div>
+            <div class="new-data-col">
+              <span class="col-name">revenue</span>
+              <span class="col-type numeric">数値</span>
+            </div>
+            <div class="new-data-col">
+              <span class="col-name">category</span>
+              <span class="col-type categorical">カテゴリ</span>
+            </div>
+          </div>
+        </div>
+        <div class="new-data-section" style="border-bottom:none;">
+          <div class="new-data-header">
+            <span class="table-name">customer_master</span>
+            <span class="row-count">567行</span>
+            <span class="chevron">▶</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 9. フルページ プレビュー ===== -->
+<section class="section" id="fullpage">
+  <div class="section-header">
+    <h2>フルページ構成 — 提案</h2>
+    <p>サイドバー + メインコンテンツの統合レイアウト</p>
+  </div>
+
+  <div class="full-preview">
+    <div class="sidebar-area">
+      <div class="new-sidebar" style="border-radius:0; height:100%; width:100%;">
+        <div class="logo">
+          <div class="logo-mark"></div>
+          <span class="logo-text">分析くん</span>
+        </div>
+        <div style="padding:6px 10px; font-size:13px; font-weight:600; color:#fafaf9;">
+          売上分析
+        </div>
+        <div class="section-label">ワークフロー</div>
+        <div class="nav-item"><span class="num">1</span> データ管理</div>
+        <div class="nav-item"><span class="num">2</span> リレーション</div>
+        <div class="nav-item"><span class="num">3</span> 分析設定</div>
+        <div class="nav-item active"><span class="num">4</span> ダッシュボード</div>
+        <div class="nav-item"><span class="num">5</span> 予測</div>
+      </div>
+    </div>
+    <div class="main-area">
+      <div class="topbar">
+        <span class="crumb">ホーム</span>
+        <span class="crumb-sep">/</span>
+        <span class="crumb">売上分析</span>
+        <span class="crumb-sep">/</span>
+        <span style="color:#1c1917; font-weight:500;">ダッシュボード</span>
+      </div>
+
+      <h2 style="font-size:18px; font-weight:600; margin-bottom:4px;">学習結果</h2>
+      <p style="font-size:12px; color:#a8a29e; margin-bottom:20px;">LightGBM — 2024/03/15 14:32 完了</p>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div>
+          <div style="border-left:2px solid #d97706; padding-left:14px; margin-bottom:24px;">
+            <h3 style="font-size:13px; font-weight:600; margin-bottom:10px;">モデル精度</h3>
+            <div class="new-metrics">
+              <div class="new-metrics-row">
+                <span class="new-metrics-label">R²</span>
+                <span class="new-metrics-value">0.873</span>
+                <div class="new-metrics-bar"><div class="new-metrics-bar-fill" style="width:87%"></div></div>
+              </div>
+              <div class="new-metrics-row">
+                <span class="new-metrics-label">RMSE</span>
+                <span class="new-metrics-value">12.4</span>
+              </div>
+              <div class="new-metrics-row">
+                <span class="new-metrics-label">MAE</span>
+                <span class="new-metrics-value">8.7</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-left:2px solid #e7e5e4; padding-left:14px;">
+            <h3 style="font-size:13px; font-weight:600; margin-bottom:10px;">特徴量重要度 上位5</h3>
+            <div style="font-size:12px;">
+              <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #f5f5f4;">
+                <span style="color:#78716c; width:20px; font-variant-numeric:tabular-nums;">1</span>
+                <span style="flex:1;">revenue_mean</span>
+                <span style="font-variant-numeric:tabular-nums; font-weight:500;">0.342</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #f5f5f4;">
+                <span style="color:#78716c; width:20px; font-variant-numeric:tabular-nums;">2</span>
+                <span style="flex:1;">order_count</span>
+                <span style="font-variant-numeric:tabular-nums; font-weight:500;">0.218</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #f5f5f4;">
+                <span style="color:#78716c; width:20px; font-variant-numeric:tabular-nums;">3</span>
+                <span style="flex:1;">category_encoded</span>
+                <span style="font-variant-numeric:tabular-nums; font-weight:500;">0.156</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #f5f5f4;">
+                <span style="color:#78716c; width:20px; font-variant-numeric:tabular-nums;">4</span>
+                <span style="flex:1;">days_since_signup</span>
+                <span style="font-variant-numeric:tabular-nums; font-weight:500;">0.112</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:6px 0;">
+                <span style="color:#78716c; width:20px; font-variant-numeric:tabular-nums;">5</span>
+                <span style="flex:1;">region</span>
+                <span style="font-variant-numeric:tabular-nums; font-weight:500;">0.089</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="background:#f5f5f4; border-radius:8px; height:280px; display:flex; align-items:center; justify-content:center; color:#a8a29e; font-size:13px;">
+            決定木可視化エリア（ReactFlow）
+          </div>
+          <p style="font-size:11px; color:#a8a29e; margin-top:8px;">ノードをクリックして分岐条件を確認</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 10. 実行計画 ===== -->
+<section class="section" id="plan">
+  <div class="section-header">
+    <h2>実行計画</h2>
+    <p>段階的に適用する改修ステップ</p>
+  </div>
+
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th style="width:80px;">Phase</th>
+        <th style="width:200px;">対象</th>
+        <th>作業内容</th>
+        <th style="width:100px;">影響範囲</th>
+        <th style="width:80px;">見積</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Phase 1</strong></td>
+        <td>カラーテーマ変更</td>
+        <td>globals.css のCSS変数をStone+Amberに一括置換。全ページに自動反映される基盤変更。</td>
+        <td>全ページ</td>
+        <td>小</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 2</strong></td>
+        <td>サイドバー刷新</td>
+        <td>project-sidebar.tsx / sidebar-nav.tsx を書き換え。アイコン除去、番号表示のプレーン化、ロゴ変更。</td>
+        <td>全プロジェクトページ</td>
+        <td>小</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 3</strong></td>
+        <td>ダッシュボード</td>
+        <td>KPIカード群をインラインテーブル形式に置換。特徴量重要度をリスト表示に。uppercase廃止。</td>
+        <td>dashboard/page.tsx</td>
+        <td>中</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 4</strong></td>
+        <td>Card除去・レイアウト統一</td>
+        <td>data/page.tsx, analysis/page.tsx, predict/page.tsx からCard依存を除去。区切り線・背景色差で代替。</td>
+        <td>3ページ</td>
+        <td>中</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 5</strong></td>
+        <td>ポータル/ホーム</td>
+        <td>プロジェクト一覧をリスト形式に。空状態をテキスト主体に。ヒーローセクション簡素化。</td>
+        <td>page.tsx</td>
+        <td>中</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 6</strong></td>
+        <td>アイコン精査・全体調整</td>
+        <td>全ページのPhosphorアイコンを精査。テキストで伝わる箇所は除去。ホバー効果を操作可能要素のみに限定。</td>
+        <td>全ページ</td>
+        <td>小</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="rationale" style="margin-top:24px;">
+    <strong>方針:</strong> Phase 1（カラー）を最初に行うことで、全ページの印象が一気に変わる。Phase 2-3でユーザーが最も目にするサイドバー・ダッシュボードを改善。Phase 4-6で残りを段階的に整理。各Phaseは独立しており、途中で方針変更可能。
+  </div>
+</section>
+
+<div style="height: 64px;"></div>
+
+<script>
+// ナビゲーションのアクティブ状態
+document.querySelectorAll('.nav a').forEach(link => {
+  link.addEventListener('click', (e) => {
+    document.querySelectorAll('.nav a').forEach(l => l.classList.remove('active'));
+    e.target.classList.add('active');
+  });
+});
+
+// スクロール時のアクティブ更新
+const sections = document.querySelectorAll('.section[id]');
+const navLinks = document.querySelectorAll('.nav a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(section => {
+    const rect = section.getBoundingClientRect();
+    if (rect.top <= 100) current = section.id;
+  });
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+  });
+});
+</script>
+
+</body>
+</html>

@@ -42,6 +42,7 @@ export default function ShareDialog({ projectId, open, onClose }: ShareDialogPro
     const [addRole, setAddRole] = useState<'editor' | 'viewer'>('viewer')
     const [addError, setAddError] = useState<string | null>(null)
     const [adding, setAdding] = useState(false)
+    const [deleteError, setDeleteError] = useState<string | null>(null)
 
     // ダイアログが開かれたときにメンバー一覧を取得する
     useEffect(() => {
@@ -95,12 +96,15 @@ export default function ShareDialog({ projectId, open, onClose }: ShareDialogPro
 
     // メンバーを削除する
     const handleDeleteMember = async (userId: number) => {
+        setDeleteError(null)
         try {
             await apiClient.delete(`/api/projects/${projectId}/members/${userId}`)
             // 削除後にメンバー一覧を更新する
             setMembers(members.filter(m => m.user_id !== userId))
-        } catch (error) {
-            console.error('メンバーの削除に失敗しました', error)
+        } catch (err: unknown) {
+            const axiosError = err as { response?: { data?: { detail?: string } } }
+            const detail = axiosError?.response?.data?.detail
+            setDeleteError(typeof detail === 'string' ? detail : 'メンバーの削除に失敗しました。')
         }
     }
 
@@ -133,6 +137,9 @@ export default function ShareDialog({ projectId, open, onClose }: ShareDialogPro
                 {/* メンバー一覧 */}
                 <div className="space-y-3">
                     <h4 className="text-sm font-medium text-foreground">現在のメンバー</h4>
+                    {deleteError && (
+                        <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{deleteError}</p>
+                    )}
                     {loading ? (
                         <p className="text-sm text-muted-foreground">読み込み中...</p>
                     ) : members.length === 0 ? (

@@ -11,10 +11,23 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db import models
 from app import schemas
-from app.core.deps import get_current_user, get_project_member
+from app.core.deps import get_current_user, get_project_member, require_editor
 from app.services import predict_service
 
 router = APIRouter()
+
+
+def _get_prediction_job(db: Session, job_id: str, project_id: int) -> models.PredictionJob:
+    """予測ジョブを取得し、プロジェクト整合性を検証するヘルパー"""
+    job = db.query(models.PredictionJob).filter(
+        models.PredictionJob.id == job_id,
+    ).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="予測ジョブが見つかりません")
+    # ジョブがリクエストされたプロジェクトに属するか確認する
+    if job.config.project_id != project_id:
+        raise HTTPException(status_code=404, detail="予測ジョブが見つかりません")
+    return job
 
 
 @router.post("/run/{config_id}", response_model=schemas.PredictionJobResponse)
@@ -24,8 +37,7 @@ def run_prediction(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-    _member: models.ProjectMember = Depends(get_project_member),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """
     学習済みモデルで予測を実行する
@@ -82,11 +94,7 @@ def get_prediction_status(
     _member: models.ProjectMember = Depends(get_project_member),
 ):
     """予測ジョブのステータスを取得する"""
-    job = db.query(models.PredictionJob).filter(
-        models.PredictionJob.id == job_id,
-    ).first()
-    if job is None:
-        raise HTTPException(status_code=404, detail="予測ジョブが見つかりません")
+    job = _get_prediction_job(db, job_id, project_id)
     return job
 
 
@@ -102,11 +110,7 @@ def download_prediction(
     予測結果CSVをダウンロードする
     - ステータスがcompletedのジョブのみダウンロード可能
     """
-    job = db.query(models.PredictionJob).filter(
-        models.PredictionJob.id == job_id,
-    ).first()
-    if job is None:
-        raise HTTPException(status_code=404, detail="予測ジョブが見つかりません")
+    job = _get_prediction_job(db, job_id, project_id)
     if job.status != "completed":
         raise HTTPException(status_code=400, detail="予測がまだ完了していません")
     if not job.result_path:
@@ -139,11 +143,7 @@ def preview_prediction(
     予測結果の先頭20行と統計サマリーを返す
     CSVダウンロード前にアプリ内でプレビューできるようにする
     """
-    job = db.query(models.PredictionJob).filter(
-        models.PredictionJob.id == job_id,
-    ).first()
-    if job is None:
-        raise HTTPException(status_code=404, detail="予測ジョブが見つかりません")
+    job = _get_prediction_job(db, job_id, project_id)
     if job.status != "completed":
         raise HTTPException(status_code=400, detail="予測がまだ完了していません")
     if not job.result_path or not os.path.exists(job.result_path):
@@ -212,15 +212,10 @@ def rename_prediction_job(
     job_id: str,
     body: schemas.PredictionJobRename,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-    _member: models.ProjectMember = Depends(get_project_member),
+    _member: models.ProjectMember = Depends(require_editor),
 ):
     """予測ジョブの表示名を変更する"""
-    job = db.query(models.PredictionJob).filter(
-        models.PredictionJob.id == job_id,
-    ).first()
-    if job is None:
-        raise HTTPException(status_code=404, detail="予測ジョブが見つかりません")
+    job = _get_prediction_job(db, job_id, project_id)
     job.name = body.name
     db.commit()
     db.refresh(job)

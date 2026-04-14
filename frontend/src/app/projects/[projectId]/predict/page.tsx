@@ -17,6 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // 特徴量設定の詳細
 interface FeatureDetail {
   description: string
+  column_name?: string
+  suggestion_type?: string
 }
 
 // 分析設定の型定義（APIレスポンスに合わせた形）
@@ -54,6 +56,8 @@ export default function PredictPage() {
   const [trainedConfigIds, setTrainedConfigIds] = useState<Set<number>>(new Set())
   const [selectedConfigId, setSelectedConfigId] = useState<number | null>(null)
   const [file, setFile] = useState<File | null>(null)
+  // CSVスキーマ検証の警告メッセージ
+  const [csvWarning, setCsvWarning] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [currentJob, setCurrentJob] = useState<PredictionJob | null>(null)
@@ -119,10 +123,20 @@ export default function PredictPage() {
     }
   }
 
-  // ポーリング開始（2秒ごとに予測ジョブのステータスを確認）
+  // ポーリング開始（2秒ごとに予測ジョブのステータスを確認、最大10分でタイムアウト）
   const startPoll = (jobId: string) => {
     stopPoll()
+    let pollCount = 0
+    const MAX_POLL = 300 // 2秒 × 300 = 10分
+
     pollRef.current = setInterval(async () => {
+      pollCount++
+      if (pollCount > MAX_POLL) {
+        stopPoll()
+        setIsRunning(false)
+        setError("予測が10分以上応答していないため、ポーリングを停止しました。ページを再読み込みしてステータスを確認してください。")
+        return
+      }
       try {
         const res = await apiClient.get(`/api/projects/${projectId}/predict/status/${jobId}`)
         const job: PredictionJob = res.data
@@ -155,13 +169,46 @@ export default function PredictPage() {
   // アンマウント時にポーリングを停止
   useEffect(() => () => stopPoll(), [])
 
+  // CSVの1行目（ヘッダー）を読み取り、学習時の特徴量と照合する
+  const validateCsvHeaders = async (f: File) => {
+    setCsvWarning(null)
+    if (!selectedConfigId) return
+    const config = configs.find((c) => c.id === selectedConfigId)
+    const details = config?.feature_settings?.details
+    if (!details || details.length === 0) return
+
+    try {
+      const text = await f.slice(0, 8192).text() // 先頭8KBだけ読む
+      const firstLine = text.split(/\r?\n/)[0]
+      if (!firstLine) return
+      const csvHeaders = new Set(firstLine.split(",").map((h) => h.trim().replace(/^"|"$/g, "")))
+
+      // 特徴量名のうちCSVヘッダーに存在しないものを警告
+      const missing = details
+        .map((d) => d.column_name)
+        .filter((name): name is string => !!name && !csvHeaders.has(name))
+
+      if (missing.length > 0) {
+        setCsvWarning(`学習時の特徴量のうち ${missing.length} 件がCSVに見つかりません: ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` 他${missing.length - 5}件` : ""}`)
+      }
+    } catch {
+      // ヘッダー読み取り失敗は無視する
+    }
+  }
+
+  // ファイルセット時にバリデーションも実行する
+  const handleFileSelect = (f: File) => {
+    setFile(f)
+    validateCsvHeaders(f)
+  }
+
   // ファイルドロップ処理
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
     const f = e.dataTransfer.files[0]
     if (f && f.name.endsWith(".csv")) {
-      setFile(f)
+      handleFileSelect(f)
     } else {
       setError("CSVファイルを選択してください")
     }
@@ -318,10 +365,21 @@ export default function PredictPage() {
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0]
-                  if (f) setFile(f)
+                  if (f) handleFileSelect(f)
                 }}
               />
             </div>
+
+            {/* CSVスキーマ検証の警告 */}
+            {csvWarning && (
+              <Alert className="border-amber-200 bg-amber-50">
+                <Warning className="h-4 w-4 text-amber-600" weight="fill" />
+                <AlertDescription className="text-amber-800 text-xs">
+                  {csvWarning}
+                  <span className="block mt-1 text-amber-600">予測は実行できますが、不足カラムは欠損値として扱われます。</span>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* 予測実行ボタン：無効時はツールチップで理由を表示 */}
             {(() => {
@@ -377,7 +435,7 @@ export default function PredictPage() {
             {currentJob.status === "running" || currentJob.status === "pending" ? (
               <JobStatusCard
                 status={currentJob.status as JobStatus}
-                message={null}
+                message="予測を実行しています..."
                 className="mb-4"
               />
             ) : currentJob.status === "completed" ? (

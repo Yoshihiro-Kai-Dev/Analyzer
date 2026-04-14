@@ -92,8 +92,10 @@ export default function RegisterPage() {
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="パスワードを入力"
                                 required
+                                minLength={4}
                                 autoComplete="new-password"
                             />
+                            <p className="text-xs text-muted-foreground">4文字以上で入力してください</p>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="confirm-password">パスワード（確認）</Label>
