@@ -14,11 +14,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     volumes:
       - redis_data:/data
+    restart: unless-stopped
 
   backend:
     build: ./backend
